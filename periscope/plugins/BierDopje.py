@@ -16,112 +16,93 @@
 #    along with periscope; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import urllib
-import urllib2
-import logging
+from xml.dom import minidom
+import PluginBase
 import os
 import pickle
 import traceback
-from xml.dom import minidom
+import urllib
+import urllib2
 
-try:
-    import xdg.BaseDirectory as bd
-    is_local = True
-except ImportError:
-    is_local = False
+class BierDopje(PluginBase.PluginBase):
+    site_url = 'http://bierdopje.com'
+    site_name = 'BierDopje'
+    server_url = 'http://api.bierdopje.com/112C8204D6754A2A/'
+    multi_languages_queries = True
+    multi_filename_queries = False
+    api_based = True
+    exceptions = {'the office': 10358,
+        'the office us': 10358,
+        'greys anatomy': 3733,
+        'sanctuary us': 7904,
+        'human target 2010': 12986,
+        'csi miami': 2187,
+        'castle 2009': 12708,
+        'chase 2010': 14228,
+        'the defenders 2010': 14225,
+        'hawaii five-0 2010': 14211}
+    _plugin_languages = {'en': 'en', 'nl': 'nl'}
 
-try:
-    import xdg.BaseDirectory as bd
-    is_local = True
-except ImportError:
-    is_local = False
-
-import SubtitleDatabase
-
-exceptions = {
-    'the office' : 10358,
-    'the office us' : 10358,
-    'greys anatomy' : 3733,
-    'sanctuary us' : 7904,
-    'human target 2010' : 12986,
-    'csi miami' : 2187,
-    'castle 2009' : 12708,
-    'chase 2010' : 14228,
-    'the defenders 2010' : 14225,
-    'hawaii five-0 2010' : 14211,
-}
-
-class BierDopje(SubtitleDatabase.SubtitleDB):
-    url = "http://bierdopje.com/"
-    site_name = "BierDopje"
-
-    def __init__(self):
-        super(BierDopje, self).__init__(None)
+    def __init__(self, periscope=None):
+        super(BierDopje, self).__init__(self._plugin_languages, periscope)
         #http://api.bierdopje.com/23459DC262C0A742/GetShowByName/30+Rock
         #http://api.bierdopje.com/23459DC262C0A742/GetAllSubsFor/94/5/1/en (30 rock, season 5, episode 1)
-        
-        key = '112C8204D6754A2A'
-        self.api = "http://api.bierdopje.com/%s/" %key
-        self.showid_cache = os.path.join(bd.xdg_config_home, "periscope", "bierdopje_showid.cache")
-        if not os.path.exists(self.showid_cache):
-            f = open(self.showid_cache, 'w')
-            pickle.dump({}, f)
+        if not periscope or not periscope.cache_dir:
+             raise Exception('Cache directory is mandatory for this plugin')
+        self.showid_cache = os.path.join(periscope.cache_dir, "bierdopje_showid.cache")
+        with self.lock:
+            if not os.path.exists(self.showid_cache):
+                f = open(self.showid_cache, 'w')
+                pickle.dump({}, f)
+                f.close()
+            f = open(self.showid_cache, 'r')
+            self.showids = pickle.load(f)
             f.close()
-        f = open(self.showid_cache, 'r')
-        self.showids = pickle.load(f)
-        f.close()
-        logging.debug("Cache of showids : %s" % self.showids)
 
-    def process(self, filepath, langs):
-        ''' main method to call on the plugin, pass the filename and the wished 
-        languages and it will query the subtitles source '''
+    def list(self, filenames, languages):
+        ''' Main method to call when you want to list subtitles '''
+        # as self.multi_filename_queries is false, we won't have multiple filenames in the list so pick the only one
+        # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
+        filepath = filenames[0]
         fname = self.getFileName(filepath)
-        try:
-            subs = self.query(fname, langs)
-            if not subs and fname.rfind(".[") > 0:
-                # Try to remove the [VTV] or [EZTV] at the end of the file
-                teamless_filename = fname[0 : fname.rfind(".[")]
-                subs = self.query(teamless_filename, langs)
-                return subs
-            else:
-                return subs
-        except Exception, e:
-            logging.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
-            traceback.print_exc()
-            return []
-            
-    def createFile(self, subtitle):
-        '''get the URL of the sub, download it and return the path to the created file'''
-        sublink = subtitle["link"]
-        subpath = subtitle["filename"].rsplit(".", 1)[0] + '.srt'
-        self.downloadFile(sublink, subpath)
-        return subpath
-    
-    def query(self, token, langs=None):
-        ''' makes a query and returns info (link, lang) about found subtitles'''
-        guessedData = self.guessFileData(token)
-        if "tvshow" != guessedData['type'] :
-            return []
-        elif langs and not set(langs).intersection((['en', 'nl'])): # lang is given but does not include nl or en
-            return []
-            
-        if not langs :
-            availableLangs = ['nl', 'en']
-        else :
-            availableLangs = list(set(langs).intersection((['en', 'nl'])))
-        logging.debug("possible langs : %s " % availableLangs)
+        subs = self.query(fname, languages)
+        if not subs and fname.rfind(".[") > 0:
+            # Try to remove the [VTV] or [EZTV] at the end of the file
+            teamless_filename = fname[0 : fname.rfind(".[")]
+            subs = self.query(teamless_filename, languages)
+            return subs
+        else:
+            return subs
 
+    def download(self, subtitle):
+        ''' Main method to call when you want to download a subtitle '''
+        subpath = subtitle["filename"].rsplit(".", 1)[0] + self.getExtension(subtitle)
+        self.downloadFile(subtitle["link"], subpath)
+        return subpath
+
+    def query(self, token, languages=None):
+        ''' Makes a query and returns info (link, lang) about found subtitles '''
+        guessedData = self.guessFileData(token)
+        self.logger.debug("Data: %s" % guessedData)
+        if guessedData['type'] != "tvshow":
+            return []
+        elif languages and not set(languages).intersection((['en', 'nl'])): # lang is given but does not include nl or en
+            return []
+            
+        if not languages :
+            available_languages = ['nl', 'en']
+        else :
+            available_languages = list(set(languages).intersection((['en', 'nl'])))
         sublinks = []
-        
-        # Query the show to get the show id
+        # query the show to get the show id
         showName = guessedData['name'].lower()
-        if exceptions.has_key(showName):
-            show_id = exceptions.get(showName)
+        if self.exceptions.has_key(showName):
+            show_id = self.exceptions.get(showName)
         elif self.showids.has_key(showName):
             show_id = self.showids.get(showName)
         else :
-            getShowId_url = "%sGetShowByName/%s" %(self.api, urllib.quote(showName))
-            logging.debug("Looking for show Id @ %s" % getShowId_url)
+            getShowId_url = "%sGetShowByName/%s" % (self.server_url, urllib.quote(showName))
+            self.logger.debug("Looking for show id %s" % getShowId_url)
             page = urllib2.urlopen(getShowId_url)
             dom = minidom.parse(page)
             if not dom or len(dom.getElementsByTagName('showid')) == 0 :
@@ -133,11 +114,10 @@ class BierDopje(SubtitleDatabase.SubtitleDB):
             pickle.dump(self.showids, f)
             f.close()
             page.close()
-        
-        # Query the episode to get the subs
-        for lang in availableLangs :
-            getAllSubs_url = "%sGetAllSubsFor/%s/%s/%s/%s" %(self.api, show_id, guessedData['season'], guessedData['episode'], lang)
-            logging.debug("Looking for subs @ %s" %getAllSubs_url)
+        # query the episode to get the subs
+        for lang in available_languages :
+            getAllSubs_url = "%sGetAllSubsFor/%s/%s/%s/%s" % (self.server_url, show_id, guessedData['season'], guessedData['episode'], lang)
+            self.logger.debug("BierDopje looking for subtitles %s" % getAllSubs_url)
             page = urllib2.urlopen(getAllSubs_url)
             dom = minidom.parse(page)
             page.close()
@@ -146,14 +126,14 @@ class BierDopje(SubtitleDatabase.SubtitleDB):
                 if release.endswith(".srt"):
                     release = release[:-4]
                 dllink = sub.getElementsByTagName('downloadlink')[0].firstChild.data
-                logging.debug("Release found : %s" % release.lower())
-                logging.debug("Searching for : %s" % token.lower())
+                self.logger.debug("Release %s found while searching for %s" % (release.lower(), token.lower()))
                 if release.lower() == token.lower():
                     result = {}
                     result["release"] = release
                     result["link"] = dllink
                     result["page"] = dllink
                     result["lang"] = lang
+                    result["filename"] = release
+                    result["plugin"] = self.getClassName()
                     sublinks.append(result)
-            
         return sublinks

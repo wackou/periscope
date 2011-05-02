@@ -17,14 +17,11 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 from OpenSubtitles import OpenSubtitles
-#from SubtitleSource import SubtitleSource
+from SubtitleSource import SubtitleSource
 #from SubScene import SubScene
-from Subtitulos import Subtitulos
-from Addic7ed import Addic7ed
+#from Subtitulos import Subtitulos
+#from Addic7ed import Addic7ed
 from Podnapisi import Podnapisi
 from TheSubDB import TheSubDB
 from BierDopje import BierDopje
-
-
 #from TvSubtitles import TvSubtitles
-#from Podnapisi2 import Podnapisi

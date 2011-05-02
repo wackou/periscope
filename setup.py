@@ -1,18 +1,16 @@
 from setuptools import setup
-import version
+from periscope import version
 
-PACKAGE = 'periscope'
-VERSION = version.VERSION
+PACKAGE = 'periscope-ng'
 
-#setup(name=PACKAGE, version=VERSION, packages=['plugins', 'periscope.py', '__init__.py'])
-
-setup(name = PACKAGE, version = VERSION,
+setup(name = PACKAGE, version = version.VERSION,
       license = "GNU LGPL",
-      description = "Python module to download subtitles for a given video file",
-      author = "Patrick Dessalle",
-      author_email = "patrick.dessalle@gmail.com",
-      url = "http://code.google.com/p/periscope/",
+      description = "Python module to search and download subtitles",
+      author = "Antoine Bertin",
+      author_email = "diaoulael@gmail.com",
+      url = "https://github.com/Diaoul/periscope-ng",
       packages= [ "periscope", "periscope/plugins" ],
       py_modules=["periscope"],
-      scripts = [ "bin/periscope" ]
+      scripts = ["bin/periscope"],
+      install_requires = ["BeautifulSoup >= 3.2.0"]
       )
