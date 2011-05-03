@@ -27,6 +27,7 @@ import mimetypes
 import os
 import plugins
 import sys
+import traceback
 
 SUPPORTED_FORMATS = 'video/x-msvideo', 'video/quicktime', 'video/x-matroska', 'video/mp4'
 
@@ -284,6 +285,7 @@ class Periscope(object):
             try:
                 plugin = getattr(plugins, pluginName)(self)
             except:
+                self.logger.debug(traceback.print_exc())
                 continue
             # split tasks if the plugin can't handle multi-thing queries
             tasks.extend(plugin.splitTask({'task': 'list', 'plugin': pluginName, 'languages': languages, 'filenames': filenames, 'periscope': self}))
