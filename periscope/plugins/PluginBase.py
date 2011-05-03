@@ -89,8 +89,7 @@ class PluginBase(object):
 			return {'type': 'movie', 'name': movie.strip(), 'year': year, 'teams': teams, 'part': part}
 		return {'type': 'unknown', 'name': filename, 'teams': [] }
 
-	@staticmethod
-	def hashFile(filename):
+	def hashFile(self, filename):
 		''' Calculates the Hash à-la Media Player Classic as it is the hash used by OpenSubtitles.
 		By the way, this is not a very robust hash code. '''
 		longlongformat = 'q'  # long long 
@@ -99,7 +98,7 @@ class PluginBase(object):
 		filesize = os.path.getsize(filename)
 		hash = filesize
 		if filesize < 65536 * 2:
-			self.logger.error("File %s is too small (SizeError < 2**16)" % name)
+			self.logger.error("File %s is too small (SizeError < 2**16)" % filename)
 			return []
 		for x in range(65536 / bytesize):
 			buffer = f.read(bytesize)
@@ -116,12 +115,12 @@ class PluginBase(object):
 		returnedhash = "%016x" % hash
 		return returnedhash
 
-	def downloadFile(self, url, filename):
+	def downloadFile(self, url, filename, data=None):
 		''' Downloads the given url to the given filename '''
 		try:
 			self.logger.info("Downloading %s" % url)
 			req = urllib2.Request(url, headers={'Referer': url, 'User-Agent': self.user_agent})
-			f = urllib2.urlopen(req)
+			f = urllib2.urlopen(req, data=data)
 			dump = open(filename, "wb")
 			dump.write(f.read())
 			dump.close()
