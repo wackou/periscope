@@ -134,7 +134,7 @@ class Podnapisi(PluginBase.PluginBase):
         #self.server.authenticate(token, '', '')
         self.logger.debug("Authenticated. Starting search")
         results = self.server.search(token, [moviehash])
-        print "Results are %s" % results
+        return []
         subs = []
         for sub in results['results']:
             subs.append(sub)
