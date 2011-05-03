@@ -48,7 +48,7 @@ class PluginWorker(threading.Thread):
                 elif task['task'] == 'download': # the task is to download
                     result = None
                     while task['subtitle']:
-                        subtitle = task['subtitle'].pop() 
+                        subtitle = task['subtitle'].pop(0) 
                         # get the corresponding plugin
                         plugin = getattr(plugins, subtitle["plugin"])(task['periscope'])
                         path = plugin.download(subtitle)
