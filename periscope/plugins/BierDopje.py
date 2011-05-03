@@ -65,11 +65,11 @@ class BierDopje(PluginBase.PluginBase):
         # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
         filepath = filenames[0]
         fname = self.getFileName(filepath)
-        subs = self.query(fname, languages)
+        subs = self.query(fname, filepath, languages)
         if not subs and fname.rfind(".[") > 0:
             # Try to remove the [VTV] or [EZTV] at the end of the file
             teamless_filename = fname[0 : fname.rfind(".[")]
-            subs = self.query(teamless_filename, languages)
+            subs = self.query(teamless_filename, filepath, languages)
             return subs
         else:
             return subs
@@ -80,19 +80,19 @@ class BierDopje(PluginBase.PluginBase):
         self.downloadFile(subtitle["link"], subpath)
         return subpath
 
-    def query(self, token, languages=None):
+    def query(self, token, filepath, languages=None):
         ''' Makes a query and returns info (link, lang) about found subtitles '''
         guessedData = self.guessFileData(token)
         self.logger.debug("Data: %s" % guessedData)
         if guessedData['type'] != "tvshow":
             return []
-        elif languages and not set(languages).intersection((['en', 'nl'])): # lang is given but does not include nl or en
+        elif languages and not set(languages).intersection((self._plugin_languages.values())):
             return []
             
         if not languages :
-            available_languages = ['nl', 'en']
+            available_languages = self._plugin_languages.values()
         else :
-            available_languages = list(set(languages).intersection((['en', 'nl'])))
+            available_languages = list(set(languages).intersection((self._plugin_languages.values())))
         sublinks = []
         # query the show to get the show id
         showName = guessedData['name'].lower()
@@ -110,9 +110,10 @@ class BierDopje(PluginBase.PluginBase):
                 return []
             show_id = dom.getElementsByTagName('showid')[0].firstChild.data
             self.showids[showName] = show_id
-            f = open(self.showid_cache, 'w')
-            pickle.dump(self.showids, f)
-            f.close()
+            with self.lock:
+                f = open(self.showid_cache, 'w')
+                pickle.dump(self.showids, f)
+                f.close()
             page.close()
         # query the episode to get the subs
         for lang in available_languages :
@@ -133,7 +134,7 @@ class BierDopje(PluginBase.PluginBase):
                     result["link"] = dllink
                     result["page"] = dllink
                     result["lang"] = lang
-                    result["filename"] = release
+                    result["filename"] = filepath
                     result["plugin"] = self.getClassName()
                     sublinks.append(result)
         return sublinks
