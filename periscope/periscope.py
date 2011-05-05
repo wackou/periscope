@@ -120,7 +120,7 @@ class Periscope(object):
     @staticmethod
     def listAPIPlugins():
         ''' List plugins that use API '''
-        return filter(Periscope._isAPIBasedPlugin, Periscope.listExistingPlugins())
+        return filter(Periscope.isAPIBasedPlugin, Periscope.listExistingPlugins())
 
     def _writeConfigFile(self):
         ''' Write the configuration file '''
@@ -139,7 +139,7 @@ class Periscope(object):
         if self.config:
             self._saveLanguagesToConfig()
 
-    def _isValidLanguage(self, language):
+    def isValidLanguage(self, language):
         ''' Check if a language is valid '''
         if len(language) != 2:
             self.logger.error("Language %s is not valid" % language)
@@ -159,7 +159,7 @@ class Periscope(object):
         if not configLanguages:
             self._languages = None
             return
-        self._languages = filter(self._isValidLanguage, map(str.strip, configLanguages.split(",")))
+        self._languages = filter(self.isValidLanguage, map(str.strip, configLanguages.split(",")))
 
     def _loadLanguageFromSystem(self):
         ''' Load language from system '''
@@ -177,11 +177,11 @@ class Periscope(object):
     def set_plugins(self, value):
         ''' Set plugins and save to configuration file if specified by the constructor '''
         self.logger.debug("Setting plugins to %s" % value)
-        self._plugins = filter(self._isValidPlugin, value)
+        self._plugins = filter(self.isValidPlugin, value)
         if self.config:
             self._savePluginsToConfig()
 
-    def _isValidPlugin(self, pluginName):
+    def isValidPlugin(self, pluginName):
         ''' Check if a plugin is valid (exists) '''
         if pluginName not in self.listExistingPlugins():
             self.logger.error("Plugin %s does not exist" % pluginName)
@@ -189,7 +189,7 @@ class Periscope(object):
         return True
 
     @staticmethod
-    def _isAPIBasedPlugin(pluginName):
+    def isAPIBasedPlugin(pluginName):
         ''' Check if a plugin is API-based '''
         if not getattr(plugins, pluginName).api_based:
             return False
@@ -205,7 +205,7 @@ class Periscope(object):
         ''' Load plugins from configuration file '''
         configPlugins = self.config.get("DEFAULT", "plugins")
         self.logger.debug("Loading plugins %s from configuration file" % configPlugins)
-        self._plugins = filter(self._isValidPlugin, map(str.strip, configPlugins.split(",")))
+        self._plugins = filter(self.isValidPlugin, map(str.strip, configPlugins.split(",")))
 
     # getters/setters for the property _languages and _plugins
     languages = property(get_languages, set_languages)
@@ -219,10 +219,10 @@ class Periscope(object):
 
     def activatePlugin(self, plugin):
         ''' Activate a plugin '''
-        if self._isValidPlugin(plugin):
+        if self.isValidPlugin(plugin):
             self._plugins.append(plugin)
-            if self.config:
-                self._savePluginsToConfig()
+        if self.config:
+            self._savePluginsToConfig()
 
     def listSubtitles(self, entries):
         ''' Searches subtitles within the active plugins and returns all found matching subtitles.
