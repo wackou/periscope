@@ -33,7 +33,7 @@ def main():
     parser.add_option("-p", "--plugin", action="append", dest="plugins", help="plugins to activate")
     parser.add_option("-f", "--force", action="store_true", dest="force", help="force download of a subtitle even there is already one present")
     parser.add_option("-C", "--no-config-file", action="store_false", dest="config", help="do not use configuration file (requires -l to be specified)")
-    parser.add_option("-c", "--config-file", action="store", dest="config_file", help="configuration file to use")
+    parser.add_option("-c", "--config-file", action="store", dest="config", help="configuration file to use")
     parser.add_option("-w", "--workers", action="store", dest="workers", help="specify the number of threads to use")
     parser.add_option("--cache-dir", action="store", dest="cache_dir", help="cache directory to use")
     parser.add_option("--no-cache-dir", action="store_false", dest="cache_dir", help="do not use cache directory (some plugins may not work)")
@@ -52,7 +52,7 @@ def main():
         logging.basicConfig(level=logging.WARN, format='%(levelname)s: %(name)s %(message)s')
     else:
         logging.basicConfig(level=logging.ERROR)
-    if not options.config_file and not options.languages:
+    if not options.config and not options.languages:
         parser.error("Option -C (--no-config-file) is used without -l (--language)")
     periscope_client = periscope.Periscope(config=options.config, cache_dir=options.cache_dir, workers=options.workers, multi=options.multi, force=options.force, max_depth=3, autostart=False)
     if options.plugins:
