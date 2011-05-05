@@ -34,7 +34,7 @@ SUPPORTED_FORMATS = 'video/x-msvideo', 'video/quicktime', 'video/x-matroska', 'v
 class Periscope(object):
     ''' Main Periscope class'''
 
-    def __init__(self, config=True, cache_dir=True, workers=4, multi=False, force=False, max_depth=3, autostart=True):
+    def __init__(self, config=True, cache_dir=True, workers=4, multi=False, force=False, max_depth=3, autostart=False):
         # set default values
         self.multi = multi
         self.force = force
