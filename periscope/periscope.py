@@ -34,7 +34,7 @@ SUPPORTED_FORMATS = 'video/x-msvideo', 'video/quicktime', 'video/x-matroska', 'v
 class Periscope(object):
     ''' Main Periscope class'''
 
-    def __init__(self, config=True, cache_dir=True, workers=4, multi=False, force=False, max_depth=3, autostart=False):
+    def __init__(self, config=True, cache_dir=True, workers=4, multi=False, force=False, max_depth=3, autostart=False, plugins_config=None):
         # set default values
         self.multi = multi
         self.force = force
@@ -48,6 +48,7 @@ class Periscope(object):
         self._plugins = self.listAPIPlugins()
         self.workers = workers
         self.logger = logging.getLogger('periscope')
+        self.plugins_config = plugins_config
         if autostart:
             self.startWorkers()
         # handle configuration file preferences

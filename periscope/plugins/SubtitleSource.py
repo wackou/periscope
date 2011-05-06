@@ -42,15 +42,18 @@ class SubtitleSource(PluginBase.PluginBase):
 
     def __init__(self, periscope=None):
         super(SubtitleSource, self).__init__(self._plugin_languages, periscope)
-        if not periscope or not periscope.config_file:
-            self.logger.error('Configuration file is mandatory for this plugin')
-            raise Exception('Configuration file is mandatory for this plugin')
-        config = ConfigParser.SafeConfigParser()
-        config.read(periscope.config_file)
-        if not config.get("SubtitleSource", "key"):
-            self.logger.error('You need to ask for a SubtitleSource API Key')
-            raise Exception('You need to ask for a SubtitleSource API Key')
-        self.server_url = self.server_url % config.get("SubtitleSource", "key") # You need to ask for it
+        if periscope and periscope.plugins_config and "subtitlesource_key" in periscope.plugins_config:
+            self.server_url = self.server_url % periscope.plugins_config["subtitlesource_key"]
+        elif periscope and periscope.config_file:
+            config = ConfigParser.SafeConfigParser()
+            config.read(periscope.config_file)
+            if not config.get("SubtitleSource", "key"):
+                self.logger.error('You need to ask for a SubtitleSource API Key')
+                raise Exception('You need to ask for a SubtitleSource API Key')
+            self.server_url = self.server_url % config.get('SubtitleSource', 'key')
+        else:
+            self.logger.error('SubtitleSource API Key is mandatory for this plugin')
+            raise Exception('SubtitleSource API Key is mandatory for this plugin')
         #http://www.subtitlesource.org/api/KEY/3.0/xmlsearch/Heroes.S03E09.HDTV.XviD-LOL/all/0
         #http://www.subtitlesource.org/api/KEY/3.0/xmlsearch/heroes/swedish/0
             
