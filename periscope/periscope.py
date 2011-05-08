@@ -232,6 +232,10 @@ class Periscope(object):
             - folderpaths (N.B. internal recursive search function will be used)
             - filenames '''
         search_results = []
+        if isinstance(entries, str):
+            entries = [entries]
+        elif not isinstance(entries, list):
+            raise TypeError('Entries should be a list or a string')
         for e in entries:
             search_results.extend(self._recursiveSearch(e))
         taskCount = 0
