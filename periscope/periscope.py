@@ -240,7 +240,7 @@ class Periscope(object):
             search_results.extend(self._recursiveSearch(e))
         taskCount = 0
         for (l, f) in search_results:
-            taskCount += self._searchSubtitles(f, l)
+            taskCount += self.searchSubtitlesThreaded(f, l)
         subtitles = []
         for i in range(taskCount):
             subtitles.extend(self.resultQueue.get(timeout=10))
@@ -280,7 +280,7 @@ class Periscope(object):
             return 1
         return 0
 
-    def _searchSubtitles(self, filenames, languages):
+    def searchSubtitlesThreaded(self, filenames, languages):
         ''' Makes workers search for subtitles in different languages for multiple filenames and puts the result in the result queue.
             Aslo split the work in multiple tasks
             When the function returns, all the results may not be available yet! '''
@@ -298,7 +298,7 @@ class Periscope(object):
             self.taskQueue.put(t)
         return len(tasks)
 
-    def _downloadSubtitles(self, subtitles):
+    def downloadSubtitlesThreaded(self, subtitles):
         ''' Makes workers download subtitles and puts the result in the result queue.
             When the function returns, all the results may not be available yet! '''
         # 1 task per file if not multi, 1 task per file and per language if multi
@@ -316,7 +316,7 @@ class Periscope(object):
     def downloadSubtitles(self, entries):
         ''' Download subtitles recursivly in entries '''
         subtitles = self.listSubtitles(entries)
-        taskCount = self._downloadSubtitles(subtitles)
+        taskCount = self.downloadSubtitlesThreaded(subtitles)
         paths = []
         for i in range(taskCount):
             paths.append(self.resultQueue.get(timeout=10))
@@ -373,10 +373,14 @@ class Periscope(object):
             self.pool.append(worker)
             self.logger.debug("Worker %s added to the pool" % worker.name)
 
-    def stopWorkers(self):
-        ''' Stop the pool of workers using a death event (poison pill) and wait for them to terminate properly '''
+    def sendStopSignal(self):
+        ''' Send a stop signal the pool of workers (poison pill) '''
         self.logger.debug("Sending %d poison pills into the task queue" % self.workers)
         for i in range(self.workers):
             self.taskQueue.put(None)
+    
+    def stopWorkers(self):
+        ''' Stop workers using a stop signal and wait for them to terminate properly '''
+        self.sendStopSignal()
         for worker in self.pool:
             worker.join()
