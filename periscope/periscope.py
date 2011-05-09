@@ -30,6 +30,7 @@ import sys
 import traceback
 
 SUPPORTED_FORMATS = 'video/x-msvideo', 'video/quicktime', 'video/x-matroska', 'video/mp4'
+logger = logging.getLogger('periscope')
 
 class Periscope(object):
     ''' Main Periscope class'''
@@ -47,7 +48,6 @@ class Periscope(object):
         self._languages = None
         self._plugins = self.listAPIPlugins()
         self.workers = workers
-        self.logger = logging.getLogger('periscope')
         self.plugins_config = plugins_config
         if autostart:
             self.startWorkers()
@@ -71,7 +71,7 @@ class Periscope(object):
         except:
             self.config = None
             self.config_file = None
-            self.logger.error("Failed to use the configuration file, continue without it")
+            logger.error("Failed to use the configuration file, continue without it")
             raise
         # handle cache directory preferences
         try:
@@ -80,15 +80,15 @@ class Periscope(object):
                 self.cache_dir = os.path.join(bd.xdg_config_home, "periscope", "cache")
                 if not os.path.exists(self.cache_dir): # cache directory doesn't exist, create it
                     os.mkdir(self.cache_dir)
-                    self.logger.debug('Creating cache directory: %s' % self.cache_dir)
+                    logger.debug('Creating cache directory: %s' % self.cache_dir)
             elif cache_dir: # custom configuration file
                 self.cache_dir = cache_dir
                 if not os.path.isdir(self.cache_dir): # custom v file doesn't exist, create it
                     os.mkdir(self.cache_dir)
-                    self.logger.debug('Creating cache directory: %s' % self.cache_dir)
+                    logger.debug('Creating cache directory: %s' % self.cache_dir)
         except:
             self.cache_dir = None
-            self.logger.error("Failed to use the cache directory, continue without it")
+            logger.error("Failed to use the cache directory, continue without it")
     
     def _loadConfigFile(self):
         ''' Load a configuration file specified in self.config_file '''
@@ -100,7 +100,7 @@ class Periscope(object):
         ''' Create a configuration file specified in self.config_file '''
         folder = os.path.dirname(self.config_file)
         if not os.path.exists(folder):
-            self.logger.info("Creating folder: %s" % folder)
+            logger.info("Creating folder: %s" % folder)
             os.mkdir(folder)
         # try to load a language from system
         self._loadLanguageFromSystem()
@@ -109,9 +109,9 @@ class Periscope(object):
         self.config.add_section("SubtitleSource")
         self.config.set("SubtitleSource", "key", "")
         self._writeConfigFile()
-        self.logger.info("Creating configuration file: %s" % self.config_file)
-        self.logger.debug("Languages in created configuration file: %s" % self._languages)
-        self.logger.debug("Plugins in created configuration file: %s" % self._plugins)
+        logger.info("Creating configuration file: %s" % self.config_file)
+        logger.debug("Languages in created configuration file: %s" % self._languages)
+        logger.debug("Plugins in created configuration file: %s" % self._plugins)
 
     @staticmethod
     def listExistingPlugins():
@@ -135,28 +135,29 @@ class Periscope(object):
 
     def set_languages(self, value):
         ''' Set languages and save to configuration file if specified by the constructor '''
-        self.logger.debug("Setting languages to %s" % value)
+        logger.debug("Setting languages to %s" % value)
         self._languages = value
         if self.config:
             self._saveLanguagesToConfig()
 
-    def isValidLanguage(self, language):
+    @staticmethod
+    def isValidLanguage(language):
         ''' Check if a language is valid '''
         if len(language) != 2:
-            self.logger.error("Language %s is not valid" % language)
+            logger.error("Language %s is not valid" % language)
             return False
         return True
 
     def _saveLanguagesToConfig(self):
         ''' Save languages to configuration file '''
-        self.logger.debug("Saving languages %s to configuration file" % self._languages)
+        logger.debug("Saving languages %s to configuration file" % self._languages)
         self.config.set("DEFAULT", "languages", ",".join(self._languages))
         self._writeConfigFile()
 
     def _loadLanguagesFromConfig(self):
         ''' Load languages from configuration file '''
         configLanguages = self.config.get("DEFAULT", "languages")
-        self.logger.debug("Loading languages %s from configuration file" % configLanguages)
+        logger.debug("Loading languages %s from configuration file" % configLanguages)
         if not configLanguages:
             self._languages = None
             return
@@ -164,12 +165,12 @@ class Periscope(object):
 
     def _loadLanguageFromSystem(self):
         ''' Load language from system '''
-        self.logger.debug("Loading language from system")
+        logger.debug("Loading language from system")
         try:
             self._languages = [locale.getdefaultlocale()[0][:2]]
-            self.logger.debug("Language %s loaded from system" % self._languages)
+            logger.debug("Language %s loaded from system" % self._languages)
         except:
-            self.logger.warning("Could not read language from system")
+            logger.warning("Could not read language from system")
 
     def get_plugins(self):
         ''' Get current plugins '''
@@ -177,15 +178,16 @@ class Periscope(object):
 
     def set_plugins(self, value):
         ''' Set plugins and save to configuration file if specified by the constructor '''
-        self.logger.debug("Setting plugins to %s" % value)
+        logger.debug("Setting plugins to %s" % value)
         self._plugins = filter(self.isValidPlugin, value)
         if self.config:
             self._savePluginsToConfig()
-
-    def isValidPlugin(self, pluginName):
+    
+    @staticmethod
+    def isValidPlugin(pluginName):
         ''' Check if a plugin is valid (exists) '''
-        if pluginName not in self.listExistingPlugins():
-            self.logger.error("Plugin %s does not exist" % pluginName)
+        if pluginName not in Periscope.listExistingPlugins():
+            logger.error("Plugin %s does not exist" % pluginName)
             return False
         return True
 
@@ -198,14 +200,14 @@ class Periscope(object):
 
     def _savePluginsToConfig(self):
         ''' Save plugins to configuration file '''
-        self.logger.debug("Saving plugins %s to configuration file" % self._plugins)
+        logger.debug("Saving plugins %s to configuration file" % self._plugins)
         self.config.set("DEFAULT", "plugins", ",".join(self._plugins))
         self._writeConfigFile
 
     def _loadPluginsFromConfig(self):
         ''' Load plugins from configuration file '''
         configPlugins = self.config.get("DEFAULT", "plugins")
-        self.logger.debug("Loading plugins %s from configuration file" % configPlugins)
+        logger.debug("Loading plugins %s from configuration file" % configPlugins)
         self._plugins = filter(self.isValidPlugin, map(str.strip, configPlugins.split(",")))
 
     # getters/setters for the property _languages and _plugins
@@ -284,13 +286,13 @@ class Periscope(object):
         ''' Makes workers search for subtitles in different languages for multiple filenames and puts the result in the result queue.
             Aslo split the work in multiple tasks
             When the function returns, all the results may not be available yet! '''
-        self.logger.info("Searching subtitles for %s with languages %s" % (filenames, languages))
+        logger.info("Searching subtitles for %s with languages %s" % (filenames, languages))
         tasks = []
         for pluginName in self._plugins:
             try:
                 plugin = getattr(plugins, pluginName)(self)
             except:
-                self.logger.debug(traceback.print_exc())
+                logger.debug(traceback.print_exc())
                 continue
             # split tasks if the plugin can't handle multi-thing queries
             tasks.extend(plugin.splitTask({'task': 'list', 'plugin': pluginName, 'languages': languages, 'filenames': filenames, 'periscope': self}))
@@ -341,7 +343,7 @@ class Periscope(object):
                 needed_languages = self.languages[:]
                 for l in self.languages:
                     if os.path.exists(basepath + '.%s.srt' % l):
-                        self.logger.info("Skipping language %s for file %s as it already exists. Use the --force option to force the download" % (l, entry))
+                        logger.info("Skipping language %s for file %s as it already exists. Use the --force option to force the download" % (l, entry))
                         needed_languages.remove(l)
                 if needed_languages:
                     return [(needed_languages, [os.path.normpath(entry)])]
@@ -371,11 +373,11 @@ class Periscope(object):
             worker = PluginWorker.PluginWorker(self.taskQueue, self.resultQueue)
             worker.start()
             self.pool.append(worker)
-            self.logger.debug("Worker %s added to the pool" % worker.name)
+            logger.debug("Worker %s added to the pool" % worker.name)
 
     def sendStopSignal(self):
         ''' Send a stop signal the pool of workers (poison pill) '''
-        self.logger.debug("Sending %d poison pills into the task queue" % self.workers)
+        logger.debug("Sending %d poison pills into the task queue" % self.workers)
         for i in range(self.workers):
             self.taskQueue.put(None)
     
