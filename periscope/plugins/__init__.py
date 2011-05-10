@@ -24,7 +24,6 @@ from Addic7ed import Addic7ed
 from Podnapisi import Podnapisi
 from TheSubDB import TheSubDB
 from BierDopje import BierDopje
+from TvSubtitles import TvSubtitles
 
-
-#from TvSubtitles import TvSubtitles
 #from Podnapisi2 import Podnapisi

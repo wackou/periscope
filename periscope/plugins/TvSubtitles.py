@@ -7,6 +7,8 @@ import logging
 
 import zipfile, os, urllib2
 import os, re, BeautifulSoup, urllib
+import guessit.autodetect
+from lxml import etree
 
 log = logging.getLogger(__name__)
 
@@ -246,131 +248,164 @@ showNum = {
  }
 
 
+def between(s, left, right):
+    return s.split(left)[1].split(right)[0]
+
+def simpleMatch(string, regexp):
+    try:
+        return re.compile(regexp).search(string).groups()[0]
+    except IndexError:
+        raise Exception("'%s' Does not match regexp '%s'" % (string, regexp))
+
+def levenshtein(a, b):
+    if not a: return len(b)
+    if not b: return len(a)
+
+    m = len(a)
+    n = len(b)
+    d = []
+    for i in range(m+1):
+        d.append([0] * (n+1))
+
+    for i in range(m+1):
+        d[i][0] = i
+
+    for j in range(n+1):
+        d[0][j] = j
+
+    for i in range(1, m+1):
+        for j in range(1, n+1):
+            if a[i-1] == b[j-1]:
+                cost = 0
+            else:
+                cost = 1
+
+            d[i][j] = min(d[i-1][j] + 1,     # deletion
+                          d[i][j-1] + 1,     # insertion
+                          d[i-1][j-1] + cost # substitution
+                          )
+
+    return d[m][n]
+
+
 import SubtitleDatabase
 
 class TvSubtitles(SubtitleDatabase.SubtitleDB):
 	url = "http://www.tvsubtitles.net"
 	site_name = "TvSubtitles"
 
-	URL_SHOW_PATTERN = "http://www.tvsubtitles.net/tvshow-%s.html"
-	URL_SEASON_PATTERN = "http://www.tvsubtitles.net/tvshow-%s-%d.html"
+	URL_SHOW_PATTERN = "http://www.tvsubtitles.net/tvshow-%d.html"
+	URL_SEASON_PATTERN = "http://www.tvsubtitles.net/tvshow-%d-%d.html"
+        URL_EPISODE_PATTERN = "http://www.tvsubtitles.net/episode-%d.html"
+        URL_SUBTITLE_PATTERN = "http://www.tvsubtitles.net/download-%d.html"
 
 	def __init__(self):
-		super(TvSubtitles, self).__init__({"en":'en', "fr":'fr'})## TODO ??
+		super(TvSubtitles, self).__init__({}) #"en":'en', "fr":'fr'})## TODO ??
 		self.host = TvSubtitles.url
 
-	def _get_episode_urls(self, show, season, episode, langs):
-		showId = showNum.get(show, None)
-		if not showId:
-			return []
-		show_url = self.URL_SEASON_PATTERN % (showId, season)
-		log.debug("Show url: %s" % show_url)
-		page = urllib.urlopen(show_url)
-		content = page.read()
-		content = content.replace("SCR'+'IPT", "script")
-		soup = BeautifulSoup.BeautifulSoup(content)
-		td_content = "%sx%s"%(season, episode)
-		tds = soup.findAll(text=td_content)
-		links = []
-		for td in tds:
-			imgs =  td.parent.parent.findAll("td")[3].findAll("img")
-			for img in imgs:
-				# If there is an alt, and that alt in langs or you didn't specify a langs
-				if img['alt'] and ((langs and img['alt'] in langs) or (not langs)):
-					url = self.host + "/" + img.parent['href']
-					lang = img['alt']
-					log.debug("Found lang %s - %s" %(lang, url))
-					links.append((url, lang))
+        #@cachedmethod
+        # NOTE: uses lxml at the moment
+        def getLikelyShowUrl(self, name):
+                data = urllib.urlencode({ 'q': name })
+                html = etree.HTML(urllib2.urlopen(self.url + '/search.php', data).read())
+                matches = [ s.find('a') for s in html.findall(".//div[@style='']") ]
 
-		return links
+                # add baseUrl and remove year information
+                result = []
+                for match in matches:
+                        seriesID = int(match.get('href').split('-')[1].split('.')[0]) # remove potential season number
+                        seriesUrl = self.url + '/tvshow-%d.html' % seriesID
+                        title = match.text
+                        try:
+                                idx = title.find('(') - 1
+                                title = title[:idx]
+                        except: pass
 
-	def query(self, show, season, episode, teams, langs):
-		showId = showNum.get(show, None)
-		if not showId:
-			return []
-		show_url = self.URL_SEASON_PATTERN % (showId, season)
-		log.debug("Show url: %s" % show_url)
-		page = urllib.urlopen(show_url)
-		content = page.read()
-		content = content.replace("SCR'+'IPT", "script")
-		soup = BeautifulSoup.BeautifulSoup(content)
-		td_content = "%dx%02d"%(season, episode)
-		tds = soup.findAll(text=td_content)
-		links = []
-		for td in tds:
-			imgs =  td.parent.parent.findAll("td")[3].findAll("img")
-			for img in imgs:
-				# If there is an alt, and that alt in langs or you didn't specify a langs
-				if img['alt'] and ((langs and img['alt'] in langs) or (not langs)):
-					url = img.parent['href']
-					lang = img['alt']
-					log.debug("Found lang %s - %s" %(lang, url))
-					if url.startswith("subtitle"):
-						url = self.host + "/" + url
-						log.debug("Parse : %s" %url)
-						sub = self.parseSubtitlePage(url, lang, show, season, episode, teams)
-						if sub:
-							links.append(sub)
-					else:
-						page2 = urllib.urlopen(self.host + "/" + url)
-						soup2 = BeautifulSoup.BeautifulSoup(page2)
-						subs = soup2.findAll("div", {"class" : "subtitlen"})
-						for sub in subs:
-							url = self.host + sub.get('href', None)
-							log.debug("Parse2 : %s" %url)
-							sub = self.parseSubtitlePage(url, lang, show, season, episode, teams)
-							if sub:
-								links.append(sub)
+                        result.append({ 'title': title, 'url': seriesUrl })
 
-		return links
+                if not matches:
+                        raise SmewtException("Couldn't find any matching series for '%s'" % name)
 
-	def parseSubtitlePage(self, url, lang, show, season, episode, teams):
-		fteams = []
-		for team in teams:
-			fteams += team.split("-")
-		fteams = set(fteams)
-
-		subid = url.rsplit("-", 1)[1].split('.', 1)[0]
-		link = self.host + "/download-" + subid + ".html"
-
-		page = urllib.urlopen(url)
-		content = page.read()
-		content = content.replace("SCR'+'IPT", "script")
-		soup = BeautifulSoup.BeautifulSoup(content)
-
-		subteams = set()
-		releases = soup.findAll(text="release:")
-		if releases:
-			subteams.update([releases[0].parent.parent.parent.parent.findAll("td")[2].string.lower()])
-
-		rips = soup.findAll(text="rip:")
-		if rips:
-			subteams.update([rips[0].parent.parent.parent.parent.findAll("td")[2].string.lower()])
-
-		if subteams.issubset(fteams):
-			log.debug("It'a match ! : %s <= %s" %(subteams, fteams))
-			result = {}
-			result["release"] = "%s.S%.2dE%.2d.%s" %(show.replace(" ", ".").title(), int(season), int(episode), '.'.join(subteams).upper()
-	)
-			result["lang"] = lang
-			result["link"] = link
-			result["page"] = url
-			return result
-		else:
-			log.debug("It'not a match ! : %s > %s" %(subteams, fteams))
-			return None
+                return result
 
 
+        #@cachedmethod
+        def getShowId(self, name):
+                name = name.lower()
+                showId = showNum.get(name, None)
+                if showId:
+                        log.debug("Show ID cached value for %s: %d" % (name, showId))
+                        return showId
+
+
+                # get most likely one if more than one found
+                # FIXME: this hides another potential bug which is that tvsubtitles returns a lot of
+                # false positives that it doesn't return when using from a "normal" webbrowser...
+                urls = [ (levenshtein(s['title'].lower(), name), s) for s in self.getLikelyShowUrl(name) ]
+                url = sorted(urls)[0][1]['url']
+                result = int(simpleMatch(url, 'tvshow-(.*?).html'))
+
+                log.debug('Found show ID for %s: %d' % (name, result))
+                return result
+
+
+        #@cachedmethod
+        def getEpisodeId(self, show, season, episode):
+                showID = self.getShowId(show)
+                seasonHtml = urllib2.urlopen(self.URL_SEASON_PATTERN % (showID, season)).read()
+                try:
+                        episodeRowHtml = between(seasonHtml, '%dx%02d' % (season, episode), '</tr>')
+                except IndexError:
+                        raise Exception("Season %d Episode %d unavailable for series '%s'" % (season, episode, series))
+
+                result = int(simpleMatch(episodeRowHtml, 'episode-(.*?).html'))
+
+                log.debug('Found episode ID for %s %dx%2d: %d' % (show, season, episode, result))
+                return result
+
+
+        # NOTE: uses lxml at the moment
+        def query(self, show, season, episode, teams, langs):
+                episodeId = self.getEpisodeId(show, season, episode)
+
+                episodeURL = self.URL_EPISODE_PATTERN % episodeId
+                episodeHtml = urllib2.urlopen(episodeURL).read()
+
+                episodeHtml = between(episodeHtml, '<b>Subtitles for this episode:</b>', '<br clear=all>')
+                ehtml = etree.HTML(episodeHtml)
+
+                links = []
+                for slink, sub in zip(ehtml.findall('.//a'),
+                                      ehtml.findall(".//div[@class='subtitlen']")):
+
+                        tvsubid = int(between(slink.get('href'), '-', '.'))
+
+                        links.append(dict(lang = simpleMatch(sub.find('.//img').get('src'), 'flags/(.*?).gif'),
+                                          link = self.URL_SUBTITLE_PATTERN % tvsubid,
+                                          forceType = 'zip',
+                                          title = (sub.find('.//h5').find('img').tail or '').strip(),
+                                          source = (sub.find(".//p[@title='rip']").find('img').tail or '').strip(),
+                                          release = (sub.find(".//p[@title='release']").find('img').tail or '').strip()))
+
+
+                # keep only the ones with our desired languages
+                links = [ link for link in links if link['lang'] in langs ]
+
+                # TODO: if any, only keep the ones with matching "teams"
+
+                return links
 
 
 	def process(self, filename, langs):
 		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query TvSubtitles.net '''
-		fname = unicode(self.getFileName(filename).lower())
-		guessedData = self.guessFileData(fname)
-		log.debug(fname)
-		if guessedData['type'] == 'tvshow':
-			subs = self.query(guessedData['name'], guessedData['season'], guessedData['episode'], guessedData['teams'], langs)
+
+                guessedData = guessit.autodetect.guess_filename_info(filename)
+                log.debug(filename)
+
+		if guessedData['type'] == 'episode':
+			subs = self.query(guessedData['series'], guessedData['season'], guessedData['episodeNumber'],
+                                          guessedData.get('releaseGroup', []), langs)
 			return subs
 		else:
 			return []
