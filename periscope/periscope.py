@@ -130,21 +130,24 @@ class Periscope:
         #if not os.path.isfile(filename):
             #raise InvalidFileException(filename, "does not exist")
 
-        print 'hello'
         log.info("Searching subtitles for %s with langs %s" %(filename, langs))
         subtitles = []
         q = Queue()
+        startedPlugins = []
         for name in self.pluginNames:
             try :
                 plugin = getattr(plugins, name)()
                 log.info("Searching on %s " %plugin.__class__.__name__)
                 thread = threading.Thread(target=plugin.searchInThread, args=(q, filename, langs))
                 thread.start()
-            except ImportError :
-                log.error("Plugin %s is not a valid plugin name. Skipping it.")
+                startedPlugins.append(name)
+            except ImportError:
+                log.error("Plugin %s is not a valid plugin name. Skipping it." % name)
+            except Exception, e:
+                log.error("Error while importing plugin %s: %s" % (name, e))
 
         # Get data from the queue and wait till we have a result
-        for name in self.pluginNames:
+        for name in startedPlugins:
             subs = q.get(True)
             if subs and len(subs) > 0:
                 if not langs:
