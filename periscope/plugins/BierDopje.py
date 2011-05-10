@@ -89,7 +89,7 @@ class BierDopje(SubtitleDatabase.SubtitleDB):
     def createFile(self, subtitle):
         '''get the URL of the sub, download it and return the path to the created file'''
         sublink = subtitle["link"]
-        subpath = subtitle["filename"].rsplit(".", 1)[0] + '.srt'
+        subpath = self.findSrtFilename(subtitle["filename"])
         self.downloadFile(sublink, subpath)
         return subpath
 

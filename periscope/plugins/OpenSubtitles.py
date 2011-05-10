@@ -101,16 +101,19 @@ class OpenSubtitles(SubtitleDatabase.SubtitleDB):
         '''pass the URL of the sub and the file it matches, will unzip it
         and return the path to the created file'''
         suburl = subtitle["link"]
-        videofilename = subtitle["filename"]
-        srtbasefilename = videofilename.rsplit(".", 1)[0]
-        self.downloadFile(suburl, srtbasefilename + ".srt.gz")
-        f = gzip.open(srtbasefilename+".srt.gz")
-        dump = open(srtbasefilename+".srt", "wb")
+        srtfilename = self.findSrtFilename(subtitle["filename"])
+
+        self.downloadFile(suburl, srtfilename + ".gz")
+        f = gzip.open(srtfilename+".gz")
+        dump = open(srtfilename, "wb")
         dump.write(f.read())
         dump.close()
         f.close()
-        os.remove(srtbasefilename+".srt.gz")
-        return srtbasefilename+".srt"
+        os.remove(srtfilename+".gz")
+        return srtfilename
+
+        self.downloadFile(suburl, srtfilename + ".gz")
+
 
 
     def hashFile(self, name):

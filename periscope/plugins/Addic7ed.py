@@ -150,8 +150,7 @@ class Addic7ed(SubtitleDatabase.SubtitleDB):
 		'''pass the URL of the sub and the file it matches, will unzip it
 		and return the path to the created file'''
 		suburl = subtitle["link"]
-		videofilename = subtitle["filename"]
-		srtbasefilename = videofilename.rsplit(".", 1)[0]
-		srtfilename = srtbasefilename +".srt"
+                srtfilename = self.findSrtFilename(subtitle["filename"])
+
 		self.downloadFile(suburl, srtfilename)
 		return srtfilename

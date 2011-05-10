@@ -85,6 +85,21 @@ class SubtitleDB(object):
 			os.remove(zipfilename)
 			return None
 
+        def findSrtFilename(self, videofilename):
+		srtbasefilename = videofilename.rsplit(".", 1)[0]
+		srtfilename = srtbasefilename + ".srt"
+
+                if not os.path.exists(srtfilename):
+                        return srtfilename
+
+                i = 1
+                srtfilename = srtfilename[:-4] + '.1.srt'
+                while os.path.exists(srtfilename):
+                        srtfilename = srtfilename.rsplit('.',2)[0] + '.%d.srt' % i
+                        i += 1
+
+                return srtfilename
+
 	def downloadFile(self, url, filename):
 		''' Downloads the given url to the given filename '''
 		try:

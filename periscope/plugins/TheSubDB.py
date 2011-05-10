@@ -90,8 +90,8 @@ class TheSubDB(SubtitleDatabase.SubtitleDB):
         '''pass the URL of the sub and the file it matches, will unzip it
         and return the path to the created file'''
         suburl = subtitle["link"]
-        videofilename = subtitle["filename"]
-        srtfilename = videofilename.rsplit(".", 1)[0] + '.srt'
+        srtfilename = self.findSrtFilename(subtitle["filename"])
+
         self.downloadFile(suburl, srtfilename)
         return srtfilename
 
