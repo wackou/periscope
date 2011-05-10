@@ -19,6 +19,8 @@
 import os, shutil, urllib2, sys, logging, traceback, zipfile
 import re
 
+log = logging.getLogger(__name__)
+
 class SubtitleDB(object):
 	''' Base (kind of abstract) class that represent a SubtitleDB, usually a website. Should be rewritten using abc module in Python 2.6/3K'''
 	def __init__(self, langs, revertlangs = None):
@@ -38,22 +40,22 @@ class SubtitleDB(object):
 			subs = self.process(filename, langs)
 			map(lambda item: item.setdefault("plugin", self), subs)
 			map(lambda item: item.setdefault("filename", filename), subs)
-			logging.info("%s writing %s items to queue" % (self.__class__.__name__, len(subs)))
+			log.info("%s writing %s items to queue" % (self.__class__.__name__, len(subs)))
 		except:
 			subs = []
 		queue.put(subs, True) # Each plugin must write as the caller periscopy.py waits for an result on the queue
-	
+
 	def process(self, filepath, langs):
-		''' main method to call on the plugin, pass the filename and the wished 
+		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query the subtitles source '''
 		fname = self.getFileName(filepath)
 		try:
 			return self.query(fname, langs)
 		except Exception, e:
-			logging.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
+			log.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
 			traceback.print_exc()
 			return []
-		
+
 	def createFile(self, subtitle):
 		'''pass the URL of the sub and the file it matches, will unzip it
 		and return the path to the created file'''
@@ -62,9 +64,9 @@ class SubtitleDB(object):
 		srtbasefilename = videofilename.rsplit(".", 1)[0]
 		zipfilename = srtbasefilename +".zip"
 		self.downloadFile(suburl, zipfilename)
-		
+
 		if zipfile.is_zipfile(zipfilename):
-			logging.debug("Unzipping file " + zipfilename)
+			log.debug("Unzipping file " + zipfilename)
 			zf = zipfile.ZipFile(zipfilename, "r")
 			for el in zf.infolist():
 				if el.orig_filename.rsplit(".", 1)[1] in ("srt", "sub", "txt"):
@@ -73,51 +75,51 @@ class SubtitleDB(object):
 					outfile.flush()
 					outfile.close()
 				else:
-					logging.info("File %s does not seem to be valid " %el.orig_filename)
+					log.info("File %s does not seem to be valid " %el.orig_filename)
 			# Deleting the zip file
 			zf.close()
 			os.remove(zipfilename)
 			return srtbasefilename + ".srt"
 		else:
-			logging.info("Unexpected file type (not zip)")
+			log.info("Unexpected file type (not zip)")
 			os.remove(zipfilename)
 			return None
 
 	def downloadFile(self, url, filename):
 		''' Downloads the given url to the given filename '''
 		try:
-			logging.info("Downloading %s" %url)
+			log.info("Downloading %s" %url)
 			req = urllib2.Request(url, headers={'Referer' : url, 'User-Agent' : 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.1.3)'})
-		
+
 			f = urllib2.urlopen(req)
 			dump = open(filename, "wb")
 			dump.write(f.read())
 			dump.close()
 			f.close()
-			logging.debug("Download finished to file %s. Size : %s"%(filename,os.path.getsize(filename)))
+			log.debug("Download finished to file %s. Size : %s"%(filename,os.path.getsize(filename)))
 		except urllib2.HTTPError, e:
 			print "HTTP Error:",e.code , url
 		except urllib2.URLError, e:
 			print "URL Error:",e.reason , url
 
-		
+
 	def getLG(self, language):
 		''' Returns the short (two-character) representation of the long language name'''
 		try:
 			return self.revertlangs[language]
 		except KeyError, e:
-			logging.warn("Ooops, you found a missing language in the config file of %s: %s. Send a bug report to have it added." %(self.__class__.__name__, language))
-		
+			log.warn("Ooops, you found a missing language in the config file of %s: %s. Send a bug report to have it added." %(self.__class__.__name__, language))
+
 	def getLanguage(self, lg):
 		''' Returns the long naming of the language on a two character code '''
 		try:
 			return self.langs[lg]
 		except KeyError, e:
-			logging.warn("Ooops, you found a missing language in the config file of %s: %s. Send a bug report to have it added." %(self.__class__.__name__, lg))
-	
+			log.warn("Ooops, you found a missing language in the config file of %s: %s. Send a bug report to have it added." %(self.__class__.__name__, lg))
+
 	def query(self, token):
 		raise TypeError("%s has not implemented method '%s'" %(self.__class__.__name__, sys._getframe().f_code.co_name))
-		
+
 	def getFileName(self, filepath):
 		if os.path.isfile(filepath):
 			filename = os.path.basename(filepath)
@@ -128,7 +130,7 @@ class SubtitleDB(object):
 		else:
 			fname = filename
 		return fname
-		
+
 	def guessFileData(self, filename):
 		filename = unicode(self.getFileName(filename).lower())
 		matches_tvshow = self.tvshowRegex.match(filename)
@@ -159,7 +161,7 @@ class SubtitleDB(object):
 					return {'type' : 'movie', 'name' : movie.strip(), 'year' : year, 'teams' : teams, 'part' : part}
 				else:
 					return {'type' : 'unknown', 'name' : filename, 'teams' : [] }
-		
+
 
 class InvalidFileException(Exception):
 	''' Exception object to be raised when the file is invalid'''

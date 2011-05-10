@@ -21,24 +21,26 @@ from BeautifulSoup import BeautifulSoup
 
 import SubtitleDatabase
 
+log = logging.getLogger(__name__)
+
 class Podnapisi(SubtitleDatabase.SubtitleDB):
 	url = "http://www.podnapisi.net/"
 	site_name = "Podnapisi"
 
 	def __init__(self):
 		super(Podnapisi, self).__init__({"sl" : "1", "en": "2", "no" : "3", "ko" :"4", "de" : "5", "is" : "6", "cs" : "7", "fr" : "8", "it" : "9", "bs" : "10", "ja" : "11", "ar" : "12", "ro" : "13", "es-ar" : "14", "hu" : "15", "el" : "16", "zh" : "17", "lt" : "19", "et" : "20", "lv" : "21", "he" : "22", "nl" : "23", "da" : "24", "sv" : "25", "pl" : "26", "ru" : "27", "es" : "28", "sq" : "29", "tr" : "30", "fi" : "31", "pt": "32", "bg" : "33", "mk" : "35", "sk" : "37", "hr" : "38", "zh" : "40", "hi": "42", "th" : "44", "uk": "46", "sr": "47", "pt-br" : "48", "ga": "49", "be": "50", "vi": "51", "fa": "52", "ca": "53", "id": "54"})
-		
+
 		#Note: Podnapisi uses two reference for latin serbian and cyrillic serbian (36 and 47). We'll add the 36 manually as cyrillic seems to be more used
 		self.revertlangs["36"] = "sr";
 
 		self.host = "http://simple.podnapisi.net"
 		self.search = "/ppodnapisi/search?"
-			
+
 	def process(self, filepath, langs):
-		''' main method to call on the plugin, pass the filename and the wished 
+		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query the subtitles source '''
 		fname = self.getFileName(filepath)
-		logging.debug("Searching for %s" %fname)
+		log.debug("Searching for %s" %fname)
 		try:
 			subs = []
 			if langs:
@@ -59,10 +61,10 @@ class Podnapisi(SubtitleDatabase.SubtitleDB):
 				subs += subs_lang
 			return subs
 		except Exception, e:
-			logging.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
+			log.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
 			traceback.print_exc()
 			return []
-	
+
 	def query(self, token, langs=None):
 		''' makes a query on podnapisi and returns info (link, lang) about found subtitles'''
 		sublinks = []
@@ -73,15 +75,15 @@ class Podnapisi(SubtitleDatabase.SubtitleDB):
 			params["sJ"] = 0
 
 		searchurl = self.host + self.search + urllib.urlencode(params)
-		logging.debug("dl'ing %s" %searchurl)
+		log.debug("dl'ing %s" %searchurl)
 		try:
 			socket.setdefaulttimeout(10)
 			page = urllib2.urlopen(searchurl)
 		except urllib2.HTTPError as inst:
-			logging.info("Error : %s" %inst)
+			log.info("Error : %s" %inst)
 			return sublinks
 		except urllib2.URLError as inst:
-			logging.info("TimeOut : %s" %inst)
+			log.info("TimeOut : %s" %inst)
 			return sublinks
 		content = page.read()
 		# Workaround for the Beautifulsoup 3.1 bug
@@ -106,24 +108,24 @@ class Podnapisi(SubtitleDatabase.SubtitleDB):
 				result["lang"] = self.getLG(lng)
 				sublinks.append(result)
 
-		logging.debug(sublinks)
+		log.debug(sublinks)
 		return sublinks
 
 	def createFile(self, subtitle):
 		'''pass the URL of the sub and the file it matches, will unzip it
 		and return the path to the created file'''
 		subpage = subtitle["page"]
-		
+
 		# Parse the subpage and extract the link
-		logging.debug('Downloading %s' % subpage)
+		log.debug('Downloading %s' % subpage)
 		try:
 			socket.setdefaulttimeout(10)
 			page = urllib2.urlopen(subpage)
 		except urllib2.HTTPError as inst:
-			logging.info("Error : %s" %inst)
+			log.info("Error : %s" %inst)
 			return None
 		except urllib2.URLError as inst:
-			logging.info("TimeOut : %s" %inst)
+			log.info("TimeOut : %s" %inst)
 			return None
 		content = page.read()
 		# Workaround for the Beautifulsoup 3.1 bug or HTML bugs
@@ -132,6 +134,6 @@ class Podnapisi(SubtitleDatabase.SubtitleDB):
 		soup = BeautifulSoup(content)
 		dlimg = soup.find("img", {"title" : "Download"})
 		subtitle["link"] = self.host + dlimg.parent["href"]
-		
+
 		SubtitleDatabase.SubtitleDB.createFile(self, subtitle)
 		return subtitle["link"]

@@ -8,6 +8,8 @@ import logging
 import zipfile, os, urllib2
 import os, re, BeautifulSoup, urllib
 
+log = logging.getLogger(__name__)
+
 showNum = {
 "24":38,
 "30 rock":46,
@@ -249,20 +251,20 @@ import SubtitleDatabase
 class TvSubtitles(SubtitleDatabase.SubtitleDB):
 	url = "http://www.tvsubtitles.net"
 	site_name = "TvSubtitles"
-	
+
 	URL_SHOW_PATTERN = "http://www.tvsubtitles.net/tvshow-%s.html"
 	URL_SEASON_PATTERN = "http://www.tvsubtitles.net/tvshow-%s-%d.html"
 
 	def __init__(self):
 		super(TvSubtitles, self).__init__({"en":'en', "fr":'fr'})## TODO ??
 		self.host = TvSubtitles.url
-    
+
 	def _get_episode_urls(self, show, season, episode, langs):
 		showId = showNum.get(show, None)
 		if not showId:
 			return []
 		show_url = self.URL_SEASON_PATTERN % (showId, season)
-		logging.debug("Show url: %s" % show_url)
+		log.debug("Show url: %s" % show_url)
 		page = urllib.urlopen(show_url)
 		content = page.read()
 		content = content.replace("SCR'+'IPT", "script")
@@ -277,9 +279,9 @@ class TvSubtitles(SubtitleDatabase.SubtitleDB):
 				if img['alt'] and ((langs and img['alt'] in langs) or (not langs)):
 					url = self.host + "/" + img.parent['href']
 					lang = img['alt']
-					logging.debug("Found lang %s - %s" %(lang, url))
+					log.debug("Found lang %s - %s" %(lang, url))
 					links.append((url, lang))
-					
+
 		return links
 
 	def query(self, show, season, episode, teams, langs):
@@ -287,7 +289,7 @@ class TvSubtitles(SubtitleDatabase.SubtitleDB):
 		if not showId:
 			return []
 		show_url = self.URL_SEASON_PATTERN % (showId, season)
-		logging.debug("Show url: %s" % show_url)
+		log.debug("Show url: %s" % show_url)
 		page = urllib.urlopen(show_url)
 		content = page.read()
 		content = content.replace("SCR'+'IPT", "script")
@@ -302,10 +304,10 @@ class TvSubtitles(SubtitleDatabase.SubtitleDB):
 				if img['alt'] and ((langs and img['alt'] in langs) or (not langs)):
 					url = img.parent['href']
 					lang = img['alt']
-					logging.debug("Found lang %s - %s" %(lang, url))
+					log.debug("Found lang %s - %s" %(lang, url))
 					if url.startswith("subtitle"):
 						url = self.host + "/" + url
-						logging.debug("Parse : %s" %url)
+						log.debug("Parse : %s" %url)
 						sub = self.parseSubtitlePage(url, lang, show, season, episode, teams)
 						if sub:
 							links.append(sub)
@@ -315,38 +317,38 @@ class TvSubtitles(SubtitleDatabase.SubtitleDB):
 						subs = soup2.findAll("div", {"class" : "subtitlen"})
 						for sub in subs:
 							url = self.host + sub.get('href', None)
-							logging.debug("Parse2 : %s" %url)
+							log.debug("Parse2 : %s" %url)
 							sub = self.parseSubtitlePage(url, lang, show, season, episode, teams)
 							if sub:
 								links.append(sub)
-					
+
 		return links
-		
+
 	def parseSubtitlePage(self, url, lang, show, season, episode, teams):
 		fteams = []
 		for team in teams:
 			fteams += team.split("-")
 		fteams = set(fteams)
-		
+
 		subid = url.rsplit("-", 1)[1].split('.', 1)[0]
 		link = self.host + "/download-" + subid + ".html"
-		
+
 		page = urllib.urlopen(url)
 		content = page.read()
 		content = content.replace("SCR'+'IPT", "script")
 		soup = BeautifulSoup.BeautifulSoup(content)
-		
+
 		subteams = set()
 		releases = soup.findAll(text="release:")
 		if releases:
 			subteams.update([releases[0].parent.parent.parent.parent.findAll("td")[2].string.lower()])
-		
+
 		rips = soup.findAll(text="rip:")
 		if rips:
 			subteams.update([rips[0].parent.parent.parent.parent.findAll("td")[2].string.lower()])
-		
+
 		if subteams.issubset(fteams):
-			logging.debug("It'a match ! : %s <= %s" %(subteams, fteams))
+			log.debug("It'a match ! : %s <= %s" %(subteams, fteams))
 			result = {}
 			result["release"] = "%s.S%.2dE%.2d.%s" %(show.replace(" ", ".").title(), int(season), int(episode), '.'.join(subteams).upper()
 	)
@@ -355,18 +357,18 @@ class TvSubtitles(SubtitleDatabase.SubtitleDB):
 			result["page"] = url
 			return result
 		else:
-			logging.debug("It'not a match ! : %s > %s" %(subteams, fteams))
+			log.debug("It'not a match ! : %s > %s" %(subteams, fteams))
 			return None
-			
-		
-		
+
+
+
 
 	def process(self, filename, langs):
-		''' main method to call on the plugin, pass the filename and the wished 
+		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query TvSubtitles.net '''
 		fname = unicode(self.getFileName(filename).lower())
 		guessedData = self.guessFileData(fname)
-		logging.debug(fname)
+		log.debug(fname)
 		if guessedData['type'] == 'tvshow':
 			subs = self.query(guessedData['name'], guessedData['season'], guessedData['episode'], guessedData['teams'], langs)
 			return subs

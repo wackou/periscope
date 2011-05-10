@@ -21,6 +21,8 @@ from BeautifulSoup import BeautifulSoup
 
 import SubtitleDatabase
 
+log = logging.getLogger(__name__)
+
 SS_LANGUAGES = {"en": "English",
 				"se": "Swedish",
 				"da": "Danish",
@@ -66,7 +68,7 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 		self.host = "http://subscene.com/s.aspx?subtitle="
 
 	def process(self, filepath, langs):
-		''' main method to call on the plugin, pass the filename and the wished 
+		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query the subtitles source '''
 		fname = self.getFileName(filepath)
 		try:
@@ -79,26 +81,26 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 			else:
 				return subs
 		except Exception, e:
-			logging.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
+			log.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
 			traceback.print_exc()
 			return []
-			
+
 	def createFile(self, subtitle):
 		'''pass the URL of the sub and the file it matches, will unzip it
 		and return the path to the created file'''
 		subpage = subtitle["page"]
 		page = urllib2.urlopen(subpage)
 		soup = BeautifulSoup(page)
-		
+
 		dlhref = soup.find("div", {"class" : "download"}).find("a")["href"]
 		subtitle["link"] =  "http://subscene.com" + dlhref.split('"')[7]
 		format = "zip"
 		archivefilename = subtitle["filename"].rsplit(".", 1)[0] + '.'+ format
 		self.downloadFile(subtitle["link"], archivefilename)
 		subtitlefilename = None
-		
+
 		if zipfile.is_zipfile(archivefilename):
-			logging.debug("Unzipping file " + archivefilename)
+			log.debug("Unzipping file " + archivefilename)
 			zf = zipfile.ZipFile(archivefilename, "r")
 			for el in zf.infolist():
 				extension = el.orig_filename.rsplit(".", 1)[1]
@@ -109,13 +111,13 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 					outfile.flush()
 					outfile.close()
 				else:
-					logging.info("File %s does not seem to be valid " %el.orig_filename)
+					log.info("File %s does not seem to be valid " %el.orig_filename)
 			# Deleting the zip file
 			zf.close()
 			os.remove(archivefilename)
 			return subtitlefilename
 		elif archivefilename.endswith('.rar'):
-			logging.warn('Rar is not really supported yet. Trying to call unrar')
+			log.warn('Rar is not really supported yet. Trying to call unrar')
 			import subprocess
 			try :
 				args = ['unrar', 'lb', archivefilename]
@@ -133,38 +135,38 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 							# exit
 						return subtitlefilename
 			except OSError, e:
-			    logging.error("Execution failed: %s" %e)
+			    log.error("Execution failed: %s" %e)
 			    return None
-			
+
 		else:
-			logging.info("Unexpected file type (not zip) for %s" %archivefilename)
+			log.info("Unexpected file type (not zip) for %s" %archivefilename)
 			return None
 
 	def downloadFile(self, url, filename):
 		''' Downloads the given url to the given filename '''
-		logging.info("Downloading file %s" %url)
+		log.info("Downloading file %s" %url)
 		req = urllib2.Request(url, headers={'Referer' : url, 'User-Agent' : 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.1.3)'})
-		
+
 		f = urllib2.urlopen(req, data=urllib.urlencode({'__EVENTTARGET' : 's$lc$bcr$downloadLink', '__EVENTARGUMENT' : '', '__VIEWSTATE' : '/wEPDwUHNzUxOTkwNWRk4wau5efPqhlBJJlOkKKHN8FIS04='}))
 		dump = open(filename, "wb")
 		try:
 			f.read(1000000)
 		except httplib.IncompleteRead, e:
 			dump.write(e.partial)
-			logging.warn('Incomplete read for %s ... Trying anyway to decompress.' %url)
+			log.warn('Incomplete read for %s ... Trying anyway to decompress.' %url)
 		dump.close()
 		f.close()
-		
+
 		#SubtitleDatabase.SubtitleDB.downloadFile(self, req, filename)
-	
+
 	def query(self, token, langs=None):
 		''' makes a query on subscene and returns info (link, lang) about found subtitles'''
 		sublinks = []
-		
+
 		searchurl = "%s%s" %(self.host, urllib.quote(token))
-		logging.debug("dl'ing %s" %searchurl)
+		log.debug("dl'ing %s" %searchurl)
 		page = urllib2.urlopen(searchurl)
-		
+
 		soup = BeautifulSoup(page)
 		for subs in soup("a", {"class":"a1"}):
 			lang_span = subs.find("span")

@@ -21,6 +21,8 @@ from BeautifulSoup import BeautifulSoup
 
 import SubtitleDatabase
 
+log = logging.getLogger(__name__)
+
 LANGUAGES = {u"English (US)" : "en",
 			 u"English (UK)" : "en",
 			 u"English" : "en",
@@ -42,10 +44,10 @@ class Subtitulos(SubtitleDatabase.SubtitleDB):
 		#http://www.subtitulos.es/dexter/4x01
 		self.host = "http://www.subtitulos.es"
 		self.release_pattern = re.compile(" \nVersi&oacute;n (.+), ([0-9]+).([0-9])+ MBs")
-		
+
 
 	def process(self, filepath, langs):
-		''' main method to call on the plugin, pass the filename and the wished 
+		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query the subtitles source '''
 		fname = unicode(self.getFileName(filepath).lower())
 		guessedData = self.guessFileData(fname)
@@ -54,35 +56,35 @@ class Subtitulos(SubtitleDatabase.SubtitleDB):
 			return subs
 		else:
 			return []
-	
+
 	def query(self, name, season, episode, teams, langs=None):
 		''' makes a query and returns info (link, lang) about found subtitles'''
 		sublinks = []
 		name = name.lower().replace(" ", "-")
 		searchurl = "%s/%s/%sx%s" %(self.host, name, season, episode)
-		logging.debug("dl'ing %s" %searchurl)
+		log.debug("dl'ing %s" %searchurl)
 		try:
 			page = urllib2.urlopen(searchurl)
 		except urllib2.HTTPError as inst:
-			logging.debug("Error : %s for %s" % (searchurl, inst))
+			log.debug("Error : %s for %s" % (searchurl, inst))
 			return sublinks
-		
+
 		soup = BeautifulSoup(page)
 		for subs in soup("td", {"class":"NewsTitle"}):
-			subteams = self.release_pattern.match("%s"%subs.contents[1]).groups()[0].lower()			
+			subteams = self.release_pattern.match("%s"%subs.contents[1]).groups()[0].lower()
 			teams = set(teams)
 			subteams = self.listTeams([subteams], [".", "_", " "])
-			
-			logging.debug("Team from website: %s" %subteams)
-			logging.debug("Team from file: %s" %teams)
-			
+
+			log.debug("Team from website: %s" %subteams)
+			log.debug("Team from file: %s" %teams)
+
 			#langs_html = subs.findNext("td", {"class" : "language"})
 			#lang = self.getLG(langs_html.string.strip())
-			
+
 			nexts = subs.parent.parent.findAll("td", {"class" : "language"})
 			for langs_html in nexts:
 				lang = self.getLG(langs_html.string.strip())
-		
+
 				statusTD = langs_html.findNext("td")
 				status = statusTD.find("strong").string.strip()
 
@@ -95,16 +97,16 @@ class Subtitulos(SubtitleDatabase.SubtitleDB):
 					result["link"] = link
 					result["page"] = searchurl
 					sublinks.append(result)
-				
+
 		return sublinks
-		
+
 	def listTeams(self, subteams, separators):
 		teams = []
 		for sep in separators:
 			subteams = self.splitTeam(subteams, sep)
-		logging.debug(subteams)
+		log.debug(subteams)
 		return set(subteams)
-	
+
 	def splitTeam(self, subteams, sep):
 		teams = []
 		for t in subteams:
@@ -124,7 +126,7 @@ class Subtitulos(SubtitleDatabase.SubtitleDB):
 	def downloadFile(self, url, filename):
 		''' Downloads the given url to the given filename '''
 		req = urllib2.Request(url, headers={'Referer' : url, 'User-Agent' : 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.1.3)'})
-		
+
 		f = urllib2.urlopen(req)
 		dump = open(filename, "wb")
 		dump.write(f.read())
