@@ -211,6 +211,29 @@ class Periscope:
             log.error("No subtitles could be chosen.")
             return None
 
+    def attemptDownloadSubtitleText(self, subtitles, langs):
+        subtitle = self.selectBestSubtitle(subtitles, langs)
+        if subtitle:
+            log.info("Trying to download subtitle: %s" % subtitle['link'])
+            #Download the subtitle
+            try:
+                subtext = subtitle["plugin"].downloadSubtitleText(subtitle)
+                if subtext:
+                    subtitle["subtitletext"] = subtext
+                    return subtitle
+                else:
+                    # throw exception to remove it
+                    raise Exception("Not downloaded")
+            except Exception as inst:
+                # Could not download that subtitle, remove it
+                log.warn("Subtitle %s could not be downloaded, trying the next on the list" % subtitle['link'])
+                log.error(inst)
+                subtitles.remove(subtitle)
+                return self.attemptDownloadSubtitleText(subtitles, langs)
+        else :
+            log.error("No subtitles could be chosen.")
+            return None
+
     def guessFileData(self, filename):
         subdb = plugins.SubtitleDatabase.SubtitleDB(None)
         return subdb.guessFileData(filename)
