@@ -75,17 +75,11 @@ class Podnapisi(SubtitleDatabase.SubtitleDB):
 			params["sJ"] = 0
 
 		searchurl = self.host + self.search + urllib.urlencode(params)
-		log.debug("dl'ing %s" %searchurl)
-		try:
-			socket.setdefaulttimeout(10)
-			page = urllib2.urlopen(searchurl)
-		except urllib2.HTTPError as inst:
-			log.info("Error : %s" %inst)
-			return sublinks
-		except urllib2.URLError as inst:
-			log.info("TimeOut : %s" %inst)
-			return sublinks
-		content = page.read()
+
+                content = self.downloadText(searchurl, timeout = 10)
+                if not content:
+                        return sublinks
+
 		# Workaround for the Beautifulsoup 3.1 bug
 		content = content.replace("scr'+'ipt", "script")
 		soup = BeautifulSoup(content)
@@ -134,6 +128,6 @@ class Podnapisi(SubtitleDatabase.SubtitleDB):
 		soup = BeautifulSoup(content)
 		dlimg = soup.find("img", {"title" : "Download"})
 		subtitle["link"] = self.host + dlimg.parent["href"]
+                subtitle["forceType"] = "zip"
 
-		SubtitleDatabase.SubtitleDB.createFile(self, subtitle)
-		return subtitle["link"]
+		return SubtitleDatabase.SubtitleDB.createFile(self, subtitle)
