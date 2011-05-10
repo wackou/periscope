@@ -122,13 +122,3 @@ class Subtitulos(SubtitleDatabase.SubtitleDB):
 		srtfilename = srtbasefilename +".srt"
 		self.downloadFile(suburl, srtfilename)
 		return srtfilename
-
-	def downloadFile(self, url, filename):
-		''' Downloads the given url to the given filename '''
-		req = urllib2.Request(url, headers={'Referer' : url, 'User-Agent' : 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.1.3)'})
-
-		f = urllib2.urlopen(req)
-		dump = open(filename, "wb")
-		dump.write(f.read())
-		dump.close()
-		f.close()

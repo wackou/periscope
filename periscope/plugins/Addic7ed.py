@@ -155,14 +155,3 @@ class Addic7ed(SubtitleDatabase.SubtitleDB):
 		srtfilename = srtbasefilename +".srt"
 		self.downloadFile(suburl, srtfilename)
 		return srtfilename
-
-	def downloadFile(self, url, srtfilename):
-		''' Downloads the given url to the given filename '''
-		req = urllib2.Request(url, headers={'Referer' : url, 'User-Agent' : 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.1.3)'})
-
-		f = urllib2.urlopen(req)
-		dump = open(srtfilename, "wb")
-		dump.write(f.read())
-		dump.close()
-		f.close()
-		log.debug("Download finished to file %s. Size : %s"%(srtfilename,os.path.getsize(srtfilename)))
