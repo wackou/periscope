@@ -18,6 +18,7 @@
 
 import zipfile, os, urllib2, urllib, logging, traceback, httplib, re, socket
 from BeautifulSoup import BeautifulSoup
+import guessit.autodetect
 
 import SubtitleDatabase
 
@@ -67,62 +68,59 @@ class Addic7ed(SubtitleDatabase.SubtitleDB):
 	def process(self, filepath, langs):
 		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query the subtitles source '''
-		fname = unicode(self.getFileName(filepath).lower())
-		guessedData = self.guessFileData(fname)
-		if guessedData['type'] == 'tvshow':
-			subs = self.query(guessedData['name'], guessedData['season'], guessedData['episode'], guessedData['teams'], langs)
-			return subs
-		else:
-			return []
+                guessedData = guessit.autodetect.guess_filename_info(filepath)
+                if guessedData['type'] == 'episode':
+                        team = [ guessedData['releaseGroup'].lower() ] if 'releaseGroup' in guessedData else []
+                        return self.query(guessedData['series'], guessedData['season'], guessedData['episodeNumber'], team, langs)
+                else:
+                        return []
+
 
 	def query(self, name, season, episode, teams, langs=None):
 		''' makes a query and returns info (link, lang) about found subtitles'''
 		sublinks = []
 		name = name.lower().replace(" ", "_")
 		searchurl = "%s/serie/%s/%s/%s/%s" %(self.host, name, season, episode, name)
-		log.debug("dl'ing %s" %searchurl)
-		try:
-			socket.setdefaulttimeout(3)
-			page = urllib2.urlopen(searchurl)
-		except urllib2.HTTPError as inst:
-			log.info("Error : %s - %s" %(searchurl, inst))
-			return sublinks
-		except urllib2.URLError as inst:
-			log.info("TimeOut : %s" %inst)
-			return sublinks
+                log.debug("dl'ing %s" % searchurl)
+                content = self.downloadText(searchurl, timeout = 5)
+                if not content:
+                        return sublinks
 
-		#HTML bug in addic7ed
-		content = page.read()
-		content = content.replace("The safer, easier way", "The safer, easier way \" />")
+
+                # HTML bug in addic7ed that prevents BeautifulSoup 3.1 from correctly parsing the html
+                # BeautifulSoup 3.2 doesn't have this problem, though
+                content = re.sub(r'"true"/ onclick="saveWatched(\([0-9,]*\));" >',
+                                 r'"true" onclick="saveWatched\1;" />',
+                                 content)
 
 		soup = BeautifulSoup(content)
+                log.debug('Found %d potential subs' % len(soup("td", {"class":"NewsTitle", "colspan" : "3"})))
 		for subs in soup("td", {"class":"NewsTitle", "colspan" : "3"}):
 			if not self.release_pattern.match(str(subs.contents[1])):
 				continue
+
 			subteams = self.release_pattern.match(str(subs.contents[1])).groups()[0].lower()
 
-			# Addic7ed only takes the real team	into account
+			# Addic7ed only takes the real team into account
 			fteams = []
 			for team in teams:
 				fteams += team.split("-")
 			teams = set(fteams)
 			subteams = self.listTeams([subteams], [".", "_", " "])
 
-			log.debug("[Addic7ed] Team from website: %s" %subteams)
-			log.debug("[Addic7ed] Team from file: %s" %teams)
-			log.debug("[Addic7ed] match ? %s" %subteams.issubset(teams))
+			log.debug("[Addic7ed] Team from website: %s - from file: %s - match = %s" % (subteams, teams, subteams.issubset(teams)))
 			langs_html = subs.findNext("td", {"class" : "language"})
 			lang = self.getLG(langs_html.contents[0].strip().replace('&nbsp;', ''))
 			#log.debug("[Addic7ed] Language : %s - lang : %s" %(langs_html, lang))
 
 			statusTD = langs_html.findNext("td")
-			status = statusTD.find("strong").string.strip()
+			status = statusTD.find("b").string.strip()
 
 			# take the last one (most updated if it exists)
 			links = statusTD.findNext("td").findAll("a")
 			link = "%s%s"%(self.host,links[len(links)-1]["href"])
 
-			#log.debug("%s - match : %s - lang : %s" %(status == "Completed", subteams.issubset(teams), (not langs or lang in langs)))
+			log.debug("%s - match : %s - lang : %s" %(status == "Completed", subteams.issubset(teams), (not langs or lang in langs)))
 			if status == "Completed" and subteams.issubset(teams) and (not langs or lang in langs) :
 				result = {}
 				result["release"] = "%s.S%.2dE%.2d.%s" %(name.replace("_", ".").title(), int(season), int(episode), '.'.join(subteams)
@@ -130,6 +128,7 @@ class Addic7ed(SubtitleDatabase.SubtitleDB):
 				result["lang"] = lang
 				result["link"] = link
 				result["page"] = searchurl
+                                result["forceType"] = "srt"
 				sublinks.append(result)
 		return sublinks
 
@@ -146,11 +145,3 @@ class Addic7ed(SubtitleDatabase.SubtitleDB):
 			teams += t.split(sep)
 		return teams
 
-	def createFile(self, subtitle):
-		'''pass the URL of the sub and the file it matches, will unzip it
-		and return the path to the created file'''
-		suburl = subtitle["link"]
-                srtfilename = self.findSrtFilename(subtitle["filename"])
-
-		self.downloadFile(suburl, srtfilename)
-		return srtfilename
