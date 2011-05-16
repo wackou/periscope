@@ -18,7 +18,7 @@
 
 import zipfile, os, urllib2, urllib, logging, traceback, httplib, re, socket
 from BeautifulSoup import BeautifulSoup
-import guessit.autodetect
+import guessit
 
 import SubtitleDatabase
 
@@ -68,7 +68,7 @@ class Addic7ed(SubtitleDatabase.SubtitleDB):
 	def process(self, filepath, langs):
 		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query the subtitles source '''
-                guessedData = guessit.autodetect.guess_filename_info(filepath)
+                guessedData = guessit.guess_video_info(filepath)
                 if guessedData['type'] == 'episode':
                         team = [ guessedData['releaseGroup'].lower() ] if 'releaseGroup' in guessedData else []
                         return self.query(guessedData['series'], guessedData['season'], guessedData['episodeNumber'], team, langs)

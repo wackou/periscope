@@ -7,7 +7,7 @@ import logging
 
 import zipfile, os, urllib2
 import os, re, BeautifulSoup, urllib
-import guessit.autodetect
+import guessit
 from lxml import etree
 
 log = logging.getLogger(__name__)
@@ -400,7 +400,7 @@ class TvSubtitles(SubtitleDatabase.SubtitleDB):
 		''' main method to call on the plugin, pass the filename and the wished
 		languages and it will query TvSubtitles.net '''
 
-                guessedData = guessit.autodetect.guess_filename_info(filename)
+                guessedData = guessit.guess_video_info(filename)
                 log.debug(filename)
 
 		if guessedData['type'] == 'episode':
