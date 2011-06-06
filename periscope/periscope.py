@@ -17,209 +17,372 @@
 #    along with periscope; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import getopt
-import sys
-import os
-import threading
-import logging
-from Queue import Queue
-
-import traceback
+from itertools import groupby
 import ConfigParser
-
-try:
-    import xdg.BaseDirectory as bd
-    is_local = True
-except ImportError:
-    is_local = False
-
-import plugins
-import version
+import PluginWorker
+import Queue
 import locale
+import logging
+import mimetypes
+import os
+import plugins
+import sys
+import traceback
 
 SUPPORTED_FORMATS = 'video/x-msvideo', 'video/quicktime', 'video/x-matroska', 'video/mp4'
-VERSION = version.VERSION
+logger = logging.getLogger('periscope')
 
-class Periscope:
+class Periscope(object):
     ''' Main Periscope class'''
-    
-    def __init__(self):
-        self.config = ConfigParser.SafeConfigParser({"lang": "", "plugins" : "" })
-        if is_local:
-            self.config_file = os.path.join(bd.xdg_config_home, "periscope", "config")
-            if not os.path.exists(self.config_file):
-                folder = os.path.dirname(self.config_file)
-                if not os.path.exists(folder):
-                    logging.info("Creating folder %s" %folder)
-                    os.mkdir(folder)
-                logging.info("Creating config file")
-                configfile = open(self.config_file, "w")
-                self.config.write(configfile)
-                configfile.close()
-            else:
-                #Load it
-                self.config.read(self.config_file)
 
-        self.pluginNames = self.get_preferedPlugins()
-        self._preferedLanguages = None
-
-    def get_preferedLanguages(self):
-        ''' Get the prefered language from the config file '''
-        configLang = self.config.get("DEFAULT", "lang")
-        logging.info("lang read from config: " + configLang)
-        if configLang == "":
-            try :
-                l = [locale.getdefaultlocale()[0][:2]]
-            except :
-                return None
-        else:
-            return map(lambda x : x.strip(), configLang.split(","))
-
-    def set_preferedLanguages(self, langs):
-        ''' Update the config file to set the prefered language '''
-        self.config.set("DEFAULT", "lang", ",".join(langs))
-        configfile = open(self.config_file, "w")
-        self.config.write(configfile)
-        configfile.close()
-
-    def get_preferedPlugins(self):
-        ''' Get the prefered plugins from the config file '''
-        configPlugins = self.config.get("DEFAULT", "plugins")
-        if not configPlugins or configPlugins.strip() == "":
-            return self.listExistingPlugins()
-        else :
-            logging.info("plugins read from config : " + configPlugins)
-            return map(lambda x : x.strip(), configPlugins.split(","))
-            
-    def set_preferedPlugins(self, newPlugins):
-        ''' Update the config file to set the prefered plugins) '''
-        self.config.set("DEFAULT", "plugins", ",".join(newPlugins))
-        configfile = open(self.config_file, "w")
-        self.config.write(configfile)
-        configfile.close()
-        
-
-    # Getter/setter for the property preferedLanguages
-    preferedLanguages = property(get_preferedLanguages, set_preferedLanguages)
-    preferedPlugins = property(get_preferedPlugins, set_preferedPlugins)
-    
-    def deactivatePlugin(self, pluginName):
-        ''' Remove a plugin from the list '''
-        self.pluginNames -= pluginName
-        self.set_preferedPlugins(self.pluginNames)
-        
-    def activatePlugin(self, pluginName):
-        ''' Activate a plugin '''
-        if pluginName not in self.listExistingPlugins():
-            raise ImportError("No plugin with the name %s exists" %pluginName)
-        self.pluginNames += pluginName
-        self.set_preferedPlugins(self.pluginNames)
-        
-    def listActivePlugins(self):
-        ''' Return all active plugins '''
-        return self.pluginNames
-        
-    def listExistingPlugins(self):
-        ''' List all possible plugins from the plugin folder '''
-        return map(lambda x : x.__name__, plugins.SubtitleDatabase.SubtitleDB.__subclasses__())
-    
-    def listSubtitles(self, filename, langs=None):
-        '''Searches subtitles within the active plugins and returns all found matching subtitles ordered by language then by plugin.'''
-        #if not os.path.isfile(filename):
-            #raise InvalidFileException(filename, "does not exist")
-    
-        logging.info("Searching subtitles for %s with langs %s" %(filename, langs))
-        subtitles = []
-        q = Queue()
-        for name in self.pluginNames:
-            try :
-                plugin = getattr(plugins, name)()
-                logging.info("Searching on %s " %plugin.__class__.__name__)
-                thread = threading.Thread(target=plugin.searchInThread, args=(q, filename, langs))
-                thread.start()
-            except ImportError :
-                logging.error("Plugin %s is not a valid plugin name. Skipping it.")        
-
-        # Get data from the queue and wait till we have a result
-        for name in self.pluginNames:
-            subs = q.get(True)
-            if subs and len(subs) > 0:
-                if not langs:
-                    subtitles += subs
-                else:
-                    for sub in subs:
-                        if sub["lang"] in langs:
-                            subtitles += [sub] # Add an array with just that sub
-            
-        if len(subtitles) == 0:
-            return []
-        return subtitles
-    
-    
-    def selectBestSubtitle(self, subtitles, langs=None):
-        '''Searches subtitles from plugins and returns the best subtitles from all candidates'''
-        if not subtitles:
-            return None
-
-        if not langs: # No preferred language => return the first
-                return subtitles[0]
-        
-        subtitles = self.__orderSubtitles__(subtitles)
-        for l in langs:
-            if subtitles.has_key(l) and len(subtitles[l]):
-                return subtitles[l][0]
-
-        return None #Could not find subtitles
-
-    def downloadSubtitle(self, filename, langs=None):
-        ''' Takes a filename and a language and creates ONE subtitle through plugins'''
-        subtitles = self.listSubtitles(filename, langs)
-        if subtitles:
-            logging.debug("All subtitles: ")
-            logging.debug(subtitles)    
-            return self.attemptDownloadSubtitle(subtitles, langs)
-        else:
-            return None
-        
-        
-    def attemptDownloadSubtitle(self, subtitles, langs):
-        subtitle = self.selectBestSubtitle(subtitles, langs)
-        if subtitle:
-            logging.info("Trying to download subtitle: %s" %subtitle['link'])
-            #Download the subtitle
-            try:
-                subpath = subtitle["plugin"].createFile(subtitle)        
-                if subpath:    
-                    subtitle["subtitlepath"] = subpath
-                    return subtitle
-                else:
-                    # throw exception to remove it
-                    raise Exception("Not downloaded")
-            except Exception as inst:
-                # Could not download that subtitle, remove it
-                logging.warn("Subtitle %s could not be downloaded, trying the next on the list" %subtitle['link'])
-                logging.error(inst)
-                subtitles.remove(subtitle)
-                return self.attemptDownloadSubtitle(subtitles, langs)
-        else :
-            logging.error("No subtitles could be chosen.")
-            return None        
-
-    def guessFileData(self, filename):
-        subdb = plugins.SubtitleDatabase.SubtitleDB(None)
-        return subdb.guessFileData(filename)        
-        
-    def __orderSubtitles__(self, subs):
-        '''reorders the subtitles according to the languages then the website'''
+    def __init__(self, config=True, cache_dir=True, workers=4, multi=False, force=False, max_depth=3, autostart=False, plugins_config=None):
+        # set default values
+        self.multi = multi
+        self.force = force
+        self.max_depth = max_depth
+        self.config = None
+        self.config_file = None
+        self.cache_dir = None
+        self.taskQueue = Queue.Queue()
+        self.resultQueue = Queue.Queue()
+        self._languages = None
+        self._plugins = self.listAPIPlugins()
+        self.workers = workers
+        self.plugins_config = plugins_config
+        if autostart:
+            self.startWorkers()
+        # handle configuration file preferences
         try:
-            from collections import defaultdict
-            subtitles = defaultdict(list) #Order matters (order of plugin and result from plugins)
-            for s in subs:
-                subtitles[s["lang"]].append(s)
-            return subtitles
-        except ImportError, e: #Don't use Python 2.5
-            subtitles = {}
-            for s in subs:
-                # return subtitles[s["lang"]], if it does not exist, set it to [] and return it, then append the subtitle
-                subtitles.setdefault(s["lang"], []).append(s)
-            return subtitles
+            if config == True: # default configuration file
+                import xdg.BaseDirectory as bd
+                self.config = ConfigParser.SafeConfigParser({"languages": "", "plugins": "" })
+                self.config_file = os.path.join(bd.xdg_config_home, "periscope", "config.ini")
+                if not os.path.exists(self.config_file): # configuration file doesn't exist, create it
+                    self._createConfigFile()
+                else: # configuration file exists, load it
+                    self._loadConfigFile()
+            elif config: # custom configuration file
+                self.config = ConfigParser.SafeConfigParser({"languages": "", "plugins": "" })
+                self.config_file = config
+                if not os.path.isfile(self.config_file): # custom configuration file doesn't exist, create it
+                    self._createConfigFile()
+                else:
+                    self._loadConfigFile()
+        except:
+            self.config = None
+            self.config_file = None
+            logger.error("Failed to use the configuration file, continue without it")
+            raise
+        # handle cache directory preferences
+        try:
+            if cache_dir == True: # default cache directory
+                import xdg.BaseDirectory as bd
+                self.cache_dir = os.path.join(bd.xdg_config_home, "periscope", "cache")
+                if not os.path.exists(self.cache_dir): # cache directory doesn't exist, create it
+                    os.mkdir(self.cache_dir)
+                    logger.debug('Creating cache directory: %s' % self.cache_dir)
+            elif cache_dir: # custom configuration file
+                self.cache_dir = cache_dir
+                if not os.path.isdir(self.cache_dir): # custom v file doesn't exist, create it
+                    os.mkdir(self.cache_dir)
+                    logger.debug('Creating cache directory: %s' % self.cache_dir)
+        except:
+            self.cache_dir = None
+            logger.error("Failed to use the cache directory, continue without it")
+    
+    def _loadConfigFile(self):
+        ''' Load a configuration file specified in self.config_file '''
+        self.config.read(self.config_file)
+        self._loadLanguagesFromConfig()
+        self._loadPluginsFromConfig()
+            
+    def _createConfigFile(self):
+        ''' Create a configuration file specified in self.config_file '''
+        folder = os.path.dirname(self.config_file)
+        if not os.path.exists(folder):
+            logger.info("Creating folder: %s" % folder)
+            os.mkdir(folder)
+        # try to load a language from system
+        self._loadLanguageFromSystem()
+        self.config.set("DEFAULT", "languages", ",".join(self._languages))
+        self.config.set("DEFAULT", "plugins", ",".join(self._plugins))
+        self.config.add_section("SubtitleSource")
+        self.config.set("SubtitleSource", "key", "")
+        self._writeConfigFile()
+        logger.info("Creating configuration file: %s" % self.config_file)
+        logger.debug("Languages in created configuration file: %s" % self._languages)
+        logger.debug("Plugins in created configuration file: %s" % self._plugins)
+
+    @staticmethod
+    def listExistingPlugins():
+        ''' List all possible plugins '''
+        return map(lambda x: x.__name__, plugins.PluginBase.PluginBase.__subclasses__())
+
+    @staticmethod
+    def listAPIPlugins():
+        ''' List plugins that use API '''
+        return filter(Periscope.isAPIBasedPlugin, Periscope.listExistingPlugins())
+
+    def _writeConfigFile(self):
+        ''' Write the configuration file '''
+        configfile = open(self.config_file, "w")
+        self.config.write(configfile)
+        configfile.close()
+
+    def get_languages(self):
+        ''' Get current languages '''
+        return self._languages
+
+    def set_languages(self, value):
+        ''' Set languages and save to configuration file if specified by the constructor '''
+        logger.debug("Setting languages to %s" % value)
+        self._languages = value
+        if self.config:
+            self._saveLanguagesToConfig()
+
+    @staticmethod
+    def isValidLanguage(language):
+        ''' Check if a language is valid '''
+        if len(language) != 2:
+            logger.error("Language %s is not valid" % language)
+            return False
+        return True
+
+    def _saveLanguagesToConfig(self):
+        ''' Save languages to configuration file '''
+        logger.debug("Saving languages %s to configuration file" % self._languages)
+        self.config.set("DEFAULT", "languages", ",".join(self._languages))
+        self._writeConfigFile()
+
+    def _loadLanguagesFromConfig(self):
+        ''' Load languages from configuration file '''
+        configLanguages = self.config.get("DEFAULT", "languages")
+        logger.debug("Loading languages %s from configuration file" % configLanguages)
+        if not configLanguages:
+            self._languages = None
+            return
+        self._languages = filter(self.isValidLanguage, map(str.strip, configLanguages.split(",")))
+
+    def _loadLanguageFromSystem(self):
+        ''' Load language from system '''
+        logger.debug("Loading language from system")
+        try:
+            self._languages = [locale.getdefaultlocale()[0][:2]]
+            logger.debug("Language %s loaded from system" % self._languages)
+        except:
+            logger.warning("Could not read language from system")
+
+    def get_plugins(self):
+        ''' Get current plugins '''
+        return self._plugins
+
+    def set_plugins(self, value):
+        ''' Set plugins and save to configuration file if specified by the constructor '''
+        logger.debug("Setting plugins to %s" % value)
+        self._plugins = filter(self.isValidPlugin, value)
+        if self.config:
+            self._savePluginsToConfig()
+    
+    @staticmethod
+    def isValidPlugin(pluginName):
+        ''' Check if a plugin is valid (exists) '''
+        if pluginName not in Periscope.listExistingPlugins():
+            logger.error("Plugin %s does not exist" % pluginName)
+            return False
+        return True
+
+    @staticmethod
+    def isAPIBasedPlugin(pluginName):
+        ''' Check if a plugin is API-based '''
+        if not getattr(plugins, pluginName).api_based:
+            return False
+        return True
+
+    def _savePluginsToConfig(self):
+        ''' Save plugins to configuration file '''
+        logger.debug("Saving plugins %s to configuration file" % self._plugins)
+        self.config.set("DEFAULT", "plugins", ",".join(self._plugins))
+        self._writeConfigFile
+
+    def _loadPluginsFromConfig(self):
+        ''' Load plugins from configuration file '''
+        configPlugins = self.config.get("DEFAULT", "plugins")
+        logger.debug("Loading plugins %s from configuration file" % configPlugins)
+        self._plugins = filter(self.isValidPlugin, map(str.strip, configPlugins.split(",")))
+
+    # getters/setters for the property _languages and _plugins
+    languages = property(get_languages, set_languages)
+    plugins = property(get_plugins, set_plugins)
+
+    def deactivatePlugin(self, plugin):
+        ''' Deactivate a plugin '''
+        self._plugins.remove(plugin)
+        if self.config:
+            self._savePluginsToConfig()
+
+    def activatePlugin(self, plugin):
+        ''' Activate a plugin '''
+        if self.isValidPlugin(plugin):
+            self._plugins.append(plugin)
+        if self.config:
+            self._savePluginsToConfig()
+
+    def listSubtitles(self, entries):
+        ''' Searches subtitles within the active plugins and returns all found matching subtitles.
+        entries can be:
+            - filepaths
+            - folderpaths (N.B. internal recursive search function will be used)
+            - filenames '''
+        search_results = []
+        if isinstance(entries, str):
+            entries = [entries]
+        elif not isinstance(entries, list):
+            raise TypeError('Entries should be a list or a string')
+        for e in entries:
+            search_results.extend(self._recursiveSearch(e))
+        taskCount = 0
+        for (l, f) in search_results:
+            taskCount += self.searchSubtitlesThreaded(f, l)
+        subtitles = []
+        for i in range(taskCount):
+            subtitles.extend(self.resultQueue.get(timeout=10))
+        return subtitles
+
+    @staticmethod
+    def arrangeSubtitles(subtitles):
+        ''' Arrange subtitles in a handy dict by filename, language and plugin '''
+        arrangedSubtitles = {}
+        for (filename, subsByFilename) in groupby(sorted(subtitles, key=lambda x: x["filename"]), lambda x: x["filename"]):
+            arrangedSubtitles[filename] = {}
+            for (language, subsByFilenameByLanguage) in groupby(sorted(subsByFilename, key=lambda x: x["lang"]), lambda x: x["lang"]):
+                arrangedSubtitles[filename][language] = {}
+                for (plugin, subsByFilenameByLanguageByPlugin) in groupby(sorted(subsByFilenameByLanguage, key=lambda x: x["plugin"]), lambda x: x["plugin"]):
+                    arrangedSubtitles[filename][language][plugin] = sorted(list(subsByFilenameByLanguageByPlugin))
+        return arrangedSubtitles
+
+    def sortSubtitlesRaw(self, subtitles):
+        ''' Sort subtitles using user defined languages and plugins '''
+        return sorted(subtitles, cmp=self._cmpSubtitles)
+
+    def _cmpSubtitles(self, x, y):
+        ''' Compares 2 subtitles elements x and y. Returns -1 if x < y, 0 if =, 1 if >
+            Use filename, languages and plugin comparison '''
+        filenames = sorted([x['filename'], y['filename']])
+        if x['filename'] != y['filename'] and filenames.index(x['filename']) < filenames(y['filename']):
+            return - 1
+        if x['filename'] != y['filename'] and filenames.index(x['filename']) > filenames(y['filename']):
+            return 1
+        if self._languages and self._languages.index(x['lang']) < self._languages.index(y['lang']):
+            return - 1
+        if self._languages and self._languages.index(x['lang']) > self._languages.index(y['lang']):
+            return 1
+        if self._plugins.index(x['plugin']) < self._plugins.index(y['plugin']):
+            return - 1
+        if self._plugins.index(x['plugin']) > self._plugins.index(y['plugin']):
+            return 1
+        return 0
+
+    def searchSubtitlesThreaded(self, filenames, languages):
+        ''' Makes workers search for subtitles in different languages for multiple filenames and puts the result in the result queue.
+            Aslo split the work in multiple tasks
+            When the function returns, all the results may not be available yet! '''
+        logger.info("Searching subtitles for %s with languages %s" % (filenames, languages))
+        tasks = []
+        for pluginName in self._plugins:
+            try:
+                plugin = getattr(plugins, pluginName)(self)
+            except:
+                logger.debug(traceback.print_exc())
+                continue
+            # split tasks if the plugin can't handle multi-thing queries
+            tasks.extend(plugin.splitTask({'task': 'list', 'plugin': pluginName, 'languages': languages, 'filenames': filenames, 'periscope': self}))
+        for t in tasks:
+            self.taskQueue.put(t)
+        return len(tasks)
+
+    def downloadSubtitlesThreaded(self, subtitles):
+        ''' Makes workers download subtitles and puts the result in the result queue.
+            When the function returns, all the results may not be available yet! '''
+        # 1 task per file if not multi, 1 task per file and per language if multi
+        taskCount = 0
+        for (filename, subsByFilename) in groupby(sorted(subtitles, key=lambda x: x["filename"]), lambda x: x["filename"]):
+            if not self.multi:
+                self.taskQueue.put({'task': 'download', 'subtitle': sorted(list(subsByFilename), cmp=self._cmpSubtitles), 'periscope': self})
+                taskCount += 1
+                continue
+            for (language, subsByFilenameByLanguage) in groupby(sorted(subsByFilename, key=lambda x: x["lang"]), lambda x: x["lang"]):
+                self.taskQueue.put({'task': 'download', 'subtitle': sorted(list(subsByFilenameByLanguage), cmp=self._cmpSubtitles), 'periscope': self})
+                taskCount += 1
+        return taskCount
+
+    def downloadSubtitles(self, entries):
+        ''' Download subtitles recursivly in entries '''
+        subtitles = self.listSubtitles(entries)
+        taskCount = self.downloadSubtitlesThreaded(subtitles)
+        paths = []
+        for i in range(taskCount):
+            paths.append(self.resultQueue.get(timeout=10))
+        return paths
+
+    def _recursiveSearch(self, entry, depth=0):
+        ''' Searches files in the entry
+            This will output a list of tuples (filename, languages) '''
+        if depth > self.max_depth and self.max_depth != 0: # we do not want to search the whole file system except if max_depth = 0
+            return []
+        if os.path.isfile(entry): # a file? scan it
+            if depth != 0: # only check for valid format if recursing, trust the user
+                mimetypes.add_type("video/x-matroska", ".mkv")
+                mimetype = mimetypes.guess_type(entry)[0]
+                if mimetype not in SUPPORTED_FORMATS:
+                    return []
+            basepath = os.path.splitext(entry)[0]
+            # check for .xx.srt if needed
+            if self.languages:
+                if self.force:
+                    return [(self.languages, [os.path.normpath(entry)])]
+                needed_languages = self.languages[:]
+                for l in self.languages:
+                    if os.path.exists(basepath + '.%s.srt' % l):
+                        logger.info("Skipping language %s for file %s as it already exists. Use the --force option to force the download" % (l, entry))
+                        needed_languages.remove(l)
+                if needed_languages:
+                    return [(needed_languages, [os.path.normpath(entry)])]
+                return []
+            # single subtitle download: .srt
+            if self.force or not os.path.exists(basepath + '.srt'):
+                return [(None, [os.path.normpath(entry)])]
+        if os.path.isdir(entry): # a dir? recurse
+            #TODO if hidden folder, don't keep going (how to handle windows/mac/linux ?)
+            files = []
+            for e in os.listdir(entry):
+                files.extend(self._recursiveSearch(os.path.join(entry, e), depth + 1))
+            files.sort()
+            grouped_files = []
+            for languages, group in groupby(files, lambda t: t[0]):
+                filenames = []
+                for t in group:
+                    filenames.extend(t[1])
+                grouped_files.append((languages, filenames)) 
+            return grouped_files
+        return [] # anything else, nothing.
+
+    def startWorkers(self):
+        ''' Create a pool of workers and start them '''
+        self.pool = []
+        for i in range(self.workers):
+            worker = PluginWorker.PluginWorker(self.taskQueue, self.resultQueue)
+            worker.start()
+            self.pool.append(worker)
+            logger.debug("Worker %s added to the pool" % worker.name)
+
+    def sendStopSignal(self):
+        ''' Send a stop signal the pool of workers (poison pill) '''
+        logger.debug("Sending %d poison pills into the task queue" % self.workers)
+        for i in range(self.workers):
+            self.taskQueue.put(None)
+    
+    def stopWorkers(self):
+        ''' Stop workers using a stop signal and wait for them to terminate properly '''
+        self.sendStopSignal()
+        for worker in self.pool:
+            worker.join()

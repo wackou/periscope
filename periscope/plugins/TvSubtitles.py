@@ -3,10 +3,16 @@
 ##  - http://code.google.com/p/arturo/source/browse/trunk/plugins/net/tvsubtitles.py
 ##  - http://www.gtk-apps.org/CONTENT/content-files/90184-download_tvsubtitles.net.py
 
+import PluginBase
 import logging
+import os
+import re
+import BeautifulSoup
+import urllib
+import zipfile
+import os
+import urllib2
 
-import zipfile, os, urllib2
-import os, re, BeautifulSoup, urllib
 
 showNum = {
 "24":38,
@@ -244,17 +250,17 @@ showNum = {
  }
 
 
-import SubtitleDatabase
 
-class TvSubtitles(SubtitleDatabase.SubtitleDB):
+class TvSubtitles(PluginBase.PluginBase):
 	url = "http://www.tvsubtitles.net"
 	site_name = "TvSubtitles"
+	api_based = False
 	
 	URL_SHOW_PATTERN = "http://www.tvsubtitles.net/tvshow-%s.html"
 	URL_SEASON_PATTERN = "http://www.tvsubtitles.net/tvshow-%s-%d.html"
 
-	def __init__(self):
-		super(TvSubtitles, self).__init__({"en":'en', "fr":'fr'})## TODO ??
+	def __init__(self, periscope=None):
+		super(TvSubtitles, self).__init__({"en":'en', "fr":'fr'}, periscope)#TODO: Complete languages
 		self.host = TvSubtitles.url
     
 	def _get_episode_urls(self, show, season, episode, langs):

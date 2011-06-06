@@ -16,92 +16,91 @@
 #    along with periscope; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import os, urllib2, urllib, xml.dom.minidom, logging, traceback
 import ConfigParser
+import PluginBase
+import os
+import traceback
+import urllib
+import urllib2
+import xml.dom.minidom
 
-try:
-    import xdg.BaseDirectory as bd
-    is_local = True
-except ImportError:
-    is_local = False
-    
-import SubtitleDatabase
+class SubtitleSource(PluginBase.PluginBase):
+    site_url = 'http://www.subtitlesource.org'
+    site_name = 'SubtitleSource'
+    server_url = 'http://www.subtitlesource.org/api/%s/3.0/xmlsearch'
+    multi_languages_queries = True
+    multi_filename_queries = False
+    api_based = True
+    _plugin_languages = {"en": "English",
+            "sv": "Swedish",
+            "da": "Danish",
+            "fi": "Finnish",
+            "no": "Norwegian",
+            "fr": "French",
+            "es": "Spanish",
+            "is": "Icelandic"}
 
-SS_LANGUAGES = {"en": "English",
-                "sv": "Swedish",
-                "da": "Danish",
-                "fi":"Finnish",
-                "no": "Norwegian",
-                "fr" : "French",
-                "es" : "Spanish",
-                "is" : "Icelandic"}
-
-class SubtitleSource(SubtitleDatabase.SubtitleDB):
-    url = "http://www.subtitlesource.org/"
-    site_name = "SubtitleSource"
-
-    def __init__(self):
-        super(SubtitleSource, self).__init__(SS_LANGUAGES)
-        if is_local : 
+    def __init__(self, periscope=None):
+        super(SubtitleSource, self).__init__(self._plugin_languages, periscope)
+        if periscope and periscope.plugins_config and "subtitlesource_key" in periscope.plugins_config:
+            self.server_url = self.server_url % periscope.plugins_config["subtitlesource_key"]
+        elif periscope and periscope.config_file:
             config = ConfigParser.SafeConfigParser()
-            config_file = os.path.join(bd.xdg_config_home, "periscope", "config")
-            config.read(config_file)
-            key = config.get("SubtitleSource", "key") # You need to ask for it
+            config.read(periscope.config_file)
+            if not config.get("SubtitleSource", "key"):
+                self.logger.error('You need to ask for a SubtitleSource API Key')
+                raise Exception('You need to ask for a SubtitleSource API Key')
+            self.server_url = self.server_url % config.get('SubtitleSource', 'key')
+        else:
+            self.logger.error('SubtitleSource API Key is mandatory for this plugin')
+            raise Exception('SubtitleSource API Key is mandatory for this plugin')
         #http://www.subtitlesource.org/api/KEY/3.0/xmlsearch/Heroes.S03E09.HDTV.XviD-LOL/all/0
         #http://www.subtitlesource.org/api/KEY/3.0/xmlsearch/heroes/swedish/0
-
-        self.host = "http://www.subtitlesource.org/api/%s/3.0/xmlsearch" %key
             
-    def process(self, filepath, langs):
-        ''' main method to call on the plugin, pass the filename and the wished 
-        languages and it will query the subtitles source '''
+    def list(self, filenames, languages):
+        ''' Main method to call when you want to list subtitles '''
+        filepath = filenames[0]
         fname = self.getFileName(filepath)
-        try:
-            subs = self.query(fname, langs)
-            if not subs and fname.rfind(".[") > 0:
-                # Try to remove the [VTV] or [EZTV] at the end of the file
-                teamless_filename = fname[0 : fname.rfind(".[")]
-                subs = self.query(teamless_filename, langs)
-                return subs
-            else:
-                return subs
-        except Exception, e:
-            logging.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
-            traceback.print_exc()
-            return []
+        subs = self.query(fname, languages)
+        if not subs and fname.rfind(".[") > 0:
+            # Try to remove the [VTV] or [EZTV] at the end of the file
+            teamless_filename = fname[0 : fname.rfind(".[")]
+            subs = self.query(teamless_filename, languages)
+            return subs
+        else:
+            return subs
     
-    def query(self, token, langs=None):
-        ''' makes a query on subtitlessource and returns info (link, lang) about found subtitles'''
-        logging.debug("local file is  : %s " % token)
+    def query(self, token, languages=None):
+        ''' Makes a query on SubtitlesSource and returns info (link, lang) about found subtitles'''
+        self.logger.debug("Local file is: %s " % token)
         sublinks = []
-        
-        if not langs: # langs is empty of None
+
+        if not languages: # langs is empty of None
             languages = ["all"]
         else: # parse each lang to generate the equivalent lang
-            languages = [SS_LANGUAGES[l] for l in langs if l in SS_LANGUAGES.keys()]
-            
+            languages = [self._plugin_languages[l] for l in languages if l in self._plugin_languages.keys()]
+
         # Get the CD part of this
         metaData = self.guessFileData(token)
         multipart = metaData.get('part', None)
         part = metaData.get('part')
         if not part : # part will return None if not found using the regex
             part = 1
-                            
+            
         for lang in languages:
-            searchurl = "%s/%s/%s/0" %(self.host, urllib.quote(token), lang)
-            logging.debug("dl'ing %s" %searchurl)
-            page = urllib2.urlopen(searchurl, timeout=5)
+            searchurl = "%s/%s/%s/0" % (self.server_url, urllib.quote(token), lang)
+            self.logger.debug("dl'ing %s" % searchurl)
+            page = urllib2.urlopen(searchurl, timeout=self.timeout)
             xmltree = xml.dom.minidom.parse(page)
             subs = xmltree.getElementsByTagName("sub")
-
             for sub in subs:
-                sublang = self.getLG(self.getValue(sub, "language"))
-                if langs and not sublang in langs:
+                sublang = self.getRevertLanguage(self.getValue(sub, "language"))
+                if languages and not sublang in languages:
                     continue # The language of this sub is not wanted => Skip
                 if multipart and not int(self.getValue(sub, 'cd')) > 1:
                     continue # The subtitle is not a multipart
-                dllink = "http://www.subtitlesource.org/download/text/%s/%s" %(self.getValue(sub, "id"), part)
-                logging.debug("Link added: %s (%s)" %(dllink,sublang))
+                dllink = "http://www.subtitlesource.org/download/text/%s/%s" % (self.getValue(sub, "id"), part)
+                self.logger.debug("Link added: %s (%s)" % (dllink, sublang))
                 result = {}
                 result["release"] = self.getValue(sub, "releasename")
                 result["link"] = dllink
@@ -110,21 +109,18 @@ class SubtitleSource(SubtitleDatabase.SubtitleDB):
                 releaseMetaData = self.guessFileData(result['release'])
                 teams = set(metaData['teams'])
                 srtTeams = set(releaseMetaData['teams'])
-                logging.debug("Analyzing : %s " % result['release'])
-                logging.debug("local file has : %s " % metaData['teams'])
-                logging.debug("remote sub has  : %s " % releaseMetaData['teams'])
-                #logging.debug("%s in %s ? %s - %s" %(releaseMetaData['teams'], metaData['teams'], teams.issubset(srtTeams), srtTeams.issubset(teams)))
+                self.logger.debug("Analyzing: %s " % result['release'])
+                self.logger.debug("Local file has: %s " % metaData['teams'])
+                self.logger.debug("Remote sub has: %s " % releaseMetaData['teams'])
                 if result['release'].startswith(token) or (releaseMetaData['name'] == metaData['name'] and releaseMetaData['type'] == metaData['type'] and (teams.issubset(srtTeams) or srtTeams.issubset(teams))):
                     sublinks.append(result)
         return sublinks
 
-            
-    def createFile(self, subtitle):
-        '''pass the URL of the sub and the file it matches, will unzip it
-        and return the path to the created file'''
+    def download(self, subtitle):
+        ''' Main method to call when you want to download a subtitle '''
         suburl = subtitle["link"]
         videofilename = subtitle["filename"]
-        srtfilename = videofilename.rsplit(".", 1)[0] + '.srt'
+        srtfilename = videofilename.rsplit(".", 1)[0] + self.getExtension(subtitle)
         self.downloadFile(suburl, srtfilename)
         return srtfilename
 

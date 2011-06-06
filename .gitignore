@@ -1,0 +1,4 @@
+build
+dist
+periscope_ng.egg-info
+*.pyc

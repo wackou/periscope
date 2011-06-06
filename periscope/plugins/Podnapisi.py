@@ -16,122 +16,133 @@
 #    along with periscope; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import zipfile, os, urllib2, urllib, traceback, logging, socket
-from BeautifulSoup import BeautifulSoup
+from hashlib import md5, sha256
+import PluginBase
+import xmlrpclib
+import struct
+import socket
+import zipfile
+import os
+import urllib2
+import urllib
+import traceback
 
-import SubtitleDatabase
+class Podnapisi(PluginBase.PluginBase):
+    site_url = "http://www.podnapisi.net"
+    site_name = "Podnapisi"
+    server_url = 'http://ssp.podnapisi.net:8000'
+    multi_languages_queries = True
+    multi_filename_queries = False
+    api_based = True
+    _plugin_languages = {"sl": "1",
+            "en": "2",
+            "no": "3",
+            "ko" :"4",
+            "de": "5",
+            "is": "6",
+            "cs": "7",
+            "fr": "8",
+            "it": "9",
+            "bs": "10",
+            "ja": "11",
+            "ar": "12",
+            "ro": "13",
+            "es-ar": "14",
+            "hu": "15",
+            "el": "16",
+            "zh": "17",
+            "lt": "19",
+            "et": "20",
+            "lv": "21",
+            "he": "22",
+            "nl": "23",
+            "da": "24",
+            "se": "25",
+            "pl": "26",
+            "ru": "27",
+            "es": "28",
+            "sq": "29",
+            "tr": "30",
+            "fi": "31",
+            "pt": "32",
+            "bg": "33",
+            "mk": "35",
+            "sk": "37",
+            "hr": "38",
+            "zh": "40",
+            "hi": "42",
+            "th": "44",
+            "uk": "46",
+            "sr": "47",
+            "pt-br": "48",
+            "ga": "49",
+            "be": "50",
+            "vi": "51",
+            "fa": "52",
+            "ca": "53",
+            "id": "54"}
 
-class Podnapisi(SubtitleDatabase.SubtitleDB):
-	url = "http://www.podnapisi.net/"
-	site_name = "Podnapisi"
+    def __init__(self, periscope=None):
+        super(Podnapisi, self).__init__(self._plugin_languages, periscope)
+        # Podnapisi uses two reference for latin serbian and cyrillic serbian (36 and 47)
+        # add the 36 manually as cyrillic seems to be more used
+        self.revertPluginLanguages["36"] = "sr"
 
-	def __init__(self):
-		super(Podnapisi, self).__init__({"sl" : "1", "en": "2", "no" : "3", "ko" :"4", "de" : "5", "is" : "6", "cs" : "7", "fr" : "8", "it" : "9", "bs" : "10", "ja" : "11", "ar" : "12", "ro" : "13", "es-ar" : "14", "hu" : "15", "el" : "16", "zh" : "17", "lt" : "19", "et" : "20", "lv" : "21", "he" : "22", "nl" : "23", "da" : "24", "sv" : "25", "pl" : "26", "ru" : "27", "es" : "28", "sq" : "29", "tr" : "30", "fi" : "31", "pt": "32", "bg" : "33", "mk" : "35", "sk" : "37", "hr" : "38", "zh" : "40", "hi": "42", "th" : "44", "uk": "46", "sr": "47", "pt-br" : "48", "ga": "49", "be": "50", "vi": "51", "fa": "52", "ca": "53", "id": "54"})
-		
-		#Note: Podnapisi uses two reference for latin serbian and cyrillic serbian (36 and 47). We'll add the 36 manually as cyrillic seems to be more used
-		self.revertlangs["36"] = "sr";
+    def list(self, filenames, languages):
+        ''' Main method to call when you want to list subtitles '''
+        # as self.multi_filename_queries is false, we won't have multiple filenames in the list so pick the only one
+        # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
+        filepath = filenames[0]
+        if os.path.isfile(filepath):
+            filehash = self.hashFile(filepath)
+            size = os.path.getsize(filepath)
+            fname = self.getFileName(filepath)
+            return self.query(moviehash=filehash, languages=languages, bytesize=size, filename=fname)
+        else:
+            fname = self.getFileName(filepath)
+            return self.query(languages=languages, filename=fname)
+    
+    def download(self, subtitle):
+        return []
+    
+    def query(self, filename, imdbID=None, moviehash=None, bytesize=None, languages=None):
+        ''' Makes a query on podnapisi and returns info (link, lang) about found subtitles '''
+        
+        # login
+        self.server = xmlrpclib.Server(self.server_url)
+        socket.setdefaulttimeout(self.timeout)
+        try:
+            log_result = self.server.initiate("Periscope")
+            self.logger.debug("Result: %s" % log_result)
+            token = log_result["session"]
+            nonce = log_result["nonce"]
+        except Exception, e:
+            self.logger.error("Cannot login" % log_result)
+            socket.setdefaulttimeout(None)
+            return []
+        username = 'getmesubs'
+        password = '99D31$$'
+        hash = md5()
+        hash.update(password)
+        password = hash.hexdigest()
 
-		self.host = "http://simple.podnapisi.net"
-		self.search = "/ppodnapisi/search?"
-			
-	def process(self, filepath, langs):
-		''' main method to call on the plugin, pass the filename and the wished 
-		languages and it will query the subtitles source '''
-		fname = self.getFileName(filepath)
-		logging.debug("Searching for %s" %fname)
-		try:
-			subs = []
-			if langs:
-				for lang in langs:
-					#query one language at a time
-					subs_lang = self.query(fname, [lang])
-					if not subs_lang:
-						# Try to remove the [VTV] or [EZTV] at the end of the file
-						teamless_filename = fname[0 : fname.rfind(".[")]
-						subs_lang = self.query(teamless_filename, langs)
-					subs += subs_lang
-			else:
-				subs_lang = self.query(fname, None)
-				if not subs_lang:
-					# Try to remove the [VTV] or [EZTV] at the end of the file
-					teamless_filename = fname[0 : fname.rfind(".[")]
-					subs_lang = self.query(teamless_filename, None)
-				subs += subs_lang
-			return subs
-		except Exception, e:
-			logging.error("Error raised by plugin %s: %s" %(self.__class__.__name__, e))
-			traceback.print_exc()
-			return []
-	
-	def query(self, token, langs=None):
-		''' makes a query on podnapisi and returns info (link, lang) about found subtitles'''
-		sublinks = []
-		params = {"sR" : token}
-		if langs and len(langs) == 1:
-			params["sJ"] = self.getLanguage(langs[0])
-		else:
-			params["sJ"] = 0
-
-		searchurl = self.host + self.search + urllib.urlencode(params)
-		logging.debug("dl'ing %s" %searchurl)
-		try:
-			socket.setdefaulttimeout(10)
-			page = urllib2.urlopen(searchurl)
-		except urllib2.HTTPError as inst:
-			logging.info("Error : %s" %inst)
-			return sublinks
-		except urllib2.URLError as inst:
-			logging.info("TimeOut : %s" %inst)
-			return sublinks
-		content = page.read()
-		# Workaround for the Beautifulsoup 3.1 bug
-		content = content.replace("scr'+'ipt", "script")
-		soup = BeautifulSoup(content)
-		for subs in soup("tr", {"class":"a"}) + soup("tr", {"class": "b"}):
-			releases = subs.find("span", {"class" : "opis"}).find("span")["title"].lower().split(" ")
-			if token.lower() in releases:
-				links = subs.findAll("a")
-				lng = subs.find("a").find("img")["src"].rsplit("/", 1)[1][:-4]
-				if langs and not self.getLG(lng) in langs:
-					continue # The lang of this sub is not wanted => Skip
-				pagelink = subs.findAll("a")[1]["href"]
-				result = {}
-				for rel in releases :
-					if rel == token.lower():
-						result["release"] = rel
-				result["link"] = None # We'll find the link later using the page
-				# some url are in unicode but urllib.quote() doesn't handle it
-				# well : http://bugs.python.org/issue1712522
-				result["page"] = self.host + urllib.quote(pagelink.encode("utf-8"))
-				result["lang"] = self.getLG(lng)
-				sublinks.append(result)
-
-		logging.debug(sublinks)
-		return sublinks
-
-	def createFile(self, subtitle):
-		'''pass the URL of the sub and the file it matches, will unzip it
-		and return the path to the created file'''
-		subpage = subtitle["page"]
-		
-		# Parse the subpage and extract the link
-		logging.debug('Downloading %s' % subpage)
-		try:
-			socket.setdefaulttimeout(10)
-			page = urllib2.urlopen(subpage)
-		except urllib2.HTTPError as inst:
-			logging.info("Error : %s" %inst)
-			return None
-		except urllib2.URLError as inst:
-			logging.info("TimeOut : %s" %inst)
-			return None
-		content = page.read()
-		# Workaround for the Beautifulsoup 3.1 bug or HTML bugs
-		content = content.replace("scr'+'ipt", "script")
-		content = content.replace("</br", "<br")
-		soup = BeautifulSoup(content)
-		dlimg = soup.find("img", {"title" : "Download"})
-		subtitle["link"] = self.host + dlimg.parent["href"]
-		
-		SubtitleDatabase.SubtitleDB.createFile(self, subtitle)
-		return subtitle["link"]
+        hash = sha256()
+        hash.update(password)
+        hash.update(nonce)
+        password = hash.hexdigest()
+        self.server.authenticate(token, username, password)
+        #self.server.authenticate(token, '', '')
+        self.logger.debug("Authenticated. Starting search")
+        results = self.server.search(token, [moviehash])
+        return []
+        subs = []
+        for sub in results['results']:
+            subs.append(sub)
+            print sub
+            
+        print "Try a download"
+        d = self.server.download(token, [173793])
+        print d
+        self.server.terminate(token)
+        return subs
+        
