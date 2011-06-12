@@ -57,38 +57,6 @@ class PluginBase(object):
 			filename = filename.rsplit('.', 1)[0]
 		return filename
 
-	@staticmethod
-	def guessFileData(filename):
-		tvshowRegex = re.compile('(?P<show>.*)S(?P<season>[0-9]{2})E(?P<episode>[0-9]{2}).(?P<teams>.*)', re.IGNORECASE)
-		tvshowRegex2 = re.compile('(?P<show>.*).(?P<season>[0-9]{1,2})x(?P<episode>[0-9]{1,2}).(?P<teams>.*)', re.IGNORECASE)
-		movieRegex = re.compile('(?P<movie>.*)[\.|\[|\(| ]{1}(?P<year>(?:(?:19|20)[0-9]{2}))(?P<teams>.*)', re.IGNORECASE)
-		filename = unicode(PluginBase.getFileName(filename).lower())
-		matches_tvshow = tvshowRegex.match(filename)
-		if matches_tvshow:
-			(tvshow, season, episode, teams) = matches_tvshow.groups()
-			tvshow = tvshow.replace(".", " ").strip()
-			teams = teams.split('.')
-			return {'type': 'tvshow', 'name': tvshow.strip(), 'season': int(season), 'episode': int(episode), 'teams': teams}
-		matches_tvshow = tvshowRegex2.match(filename)
-		if matches_tvshow:
-			(tvshow, season, episode, teams) = matches_tvshow.groups()
-			tvshow = tvshow.replace(".", " ").strip()
-			teams = teams.split('.')
-			return {'type': 'tvshow', 'name': tvshow.strip(), 'season': int(season), 'episode': int(episode), 'teams': teams}
-		matches_movie = movieRegex.match(filename)
-		if matches_movie:
-			(movie, year, teams) = matches_movie.groups()
-			teams = teams.split('.')
-			part = None
-			if "cd1" in teams :
-				teams.remove('cd1')
-				part = 1
-			if "cd2" in teams :
-				teams.remove('cd2')
-				part = 2
-			return {'type': 'movie', 'name': movie.strip(), 'year': year, 'teams': teams, 'part': part}
-		return {'type': 'unknown', 'name': filename, 'teams': [] }
-
 	def hashFile(self, filename):
 		''' Calculates the Hash à-la Media Player Classic as it is the hash used by OpenSubtitles.
 		By the way, this is not a very robust hash code. '''

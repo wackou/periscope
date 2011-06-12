@@ -9,8 +9,8 @@ setup(name = PACKAGE, version = version.VERSION,
       author = "Antoine Bertin",
       author_email = "diaoulael@gmail.com",
       url = "https://github.com/Diaoul/periscope-ng",
-      packages= [ "periscope", "periscope/plugins" ],
+      packages= ["periscope", "periscope/plugins"],
       py_modules=["periscope"],
       scripts = ["bin/periscope"],
-      install_requires = ["BeautifulSoup >= 3.2.0"]
+      install_requires = ["BeautifulSoup == 3.2.0", "guessit == 0.2"]
       )

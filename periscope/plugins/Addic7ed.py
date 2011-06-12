@@ -17,6 +17,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 from BeautifulSoup import BeautifulSoup
+import guessit
 import PluginBase
 import zipfile
 import os
@@ -75,17 +76,18 @@ class Addic7ed(PluginBase.PluginBase):
         # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
         filepath = filenames[0]
         fname = unicode(self.getFileName(filepath).lower())
-        guessedData = self.guessFileData(fname)
-        if guessedData['type'] == 'tvshow':
-            return self.query(guessedData['name'], guessedData['season'], guessedData['episode'], guessedData['teams'], filepath, languages)
+        guess = guessit.guess_file_info(filepath, 'autodetect')
+        self.logger.debug(guess.nice_string())
+        if guess['type'] == 'episode':
+            return self.query(guess['series'], guess['season'], guess['episodeNumber'], guess['releaseGroup'], filepath, languages)
         else:
             return []
 
-    def query(self, name, season, episode, teams, filepath, languages=None):
+    def query(self, name, season, episode, team, filepath, languages=None):
         ''' Make a query and returns info about found subtitles '''
-        name = name.lower().replace(" ", "_")
-        searchurl = "%s/serie/%s/%s/%s/%s" % (self.server_url, name, season, episode, name)
-        self.logger.debug("dl'ing %s" % searchurl)
+        searchname = name.lower().replace(" ", "_")
+        searchurl = "%s/serie/%s/%s/%s/%s" % (self.server_url, searchname, season, episode, searchname)
+        self.logger.debug("Searching in %s" % searchurl)
         try:
             req = urllib2.Request(searchurl, headers={'User-Agent': self.user_agent})
             page = urllib2.urlopen(req, timeout=self.timeout)
@@ -97,40 +99,36 @@ class Addic7ed(PluginBase.PluginBase):
             return []
         soup = BeautifulSoup(page.read())
         sublinks = []
-        print soup("td", {"class": "NewsTitle", "colspan": "3"})
-        for subs in soup("td", {"class": "NewsTitle", "colspan": "3"}):
-            if not self.release_pattern.match(str(subs.contents[1])):
+        for html_sub in soup("td", {"class": "NewsTitle", "colspan": "3"}):
+            if not self.release_pattern.match(str(html_sub.contents[1])): # On not needed soup td result
                 continue
-            subteams = self.release_pattern.match(str(subs.contents[1])).groups()[0].lower()
-            # Addic7ed only takes the real team     into account
-            fteams = []
-            for team in teams:
-                fteams += team.split("-")
-            teams = set(fteams)
-            subteams = self.listTeams([subteams], [".", "_", " "])
-            langs_html = subs.findNext("td", {"class" : "language"})
-            lang = self.getRevertLanguage(langs_html.contents[0].strip().replace('&nbsp;', ''))
-            statusTD = langs_html.findNext("td")
-            status = statusTD.find("strong").string.strip()
-            # take the last one (most updated if it exists)
-            links = statusTD.findNext("td").findAll("a")
-            link = "%s%s" % (self.server_url, links[len(links) - 1]["href"])
-            if status == "Completed" and subteams.issubset(teams) and (not languages or lang in languages) :
-                result = {}
-                result["release"] = "%s.S%.2dE%.2d.%s" % (name.replace("_", ".").title(), int(season), int(episode), '.'.join(subteams))
-                result["lang"] = lang
-                result["link"] = link
-                result["page"] = searchurl
-                result["filename"] = filepath
-                result["plugin"] = self.getClassName()
-                sublinks.append(result)
+            sub_teams = self.listTeams([self.release_pattern.match(str(html_sub.contents[1])).groups()[0]], [".", "_", " "])
+            if not team in sub_teams: # On wrong team
+                continue
+            html_language = html_sub.findNext("td", {"class" : "language"})
+            sub_language = self.getRevertLanguage(html_language.contents[0].strip().replace('&nbsp;', ''))
+            if languages and  not sub_language in languages: # On wrong language
+                continue
+            html_status = html_language.findNextSibling('td')
+            sub_status = html_status.find('b').string.strip()
+            if not sub_status == 'Completed': # On not completed subtitles
+                continue
+            sub_link = self.server_url + html_status.findNextSibling('td', {'colspan': '3'}).find('a')['href']
+            self.logger.debug('Found a match with teams: %s' % sub_teams)
+            result = {}
+            result["release"] = "%s.S%.2dE%.2d.%s" % (name.replace(" ", "."), int(season), int(episode), '.'.join(sub_teams))
+            result["lang"] = sub_language
+            result["link"] = sub_link
+            result["page"] = searchurl
+            result["filename"] = filepath
+            result["plugin"] = self.getClassName()
+            sublinks.append(result)
         return sublinks
 
     def listTeams(self, subteams, separators):
-        teams = []
         for sep in separators:
             subteams = self.splitTeam(subteams, sep)
-        return set(subteams)
+        return subteams
 
     def splitTeam(self, subteams, sep):
         teams = []
