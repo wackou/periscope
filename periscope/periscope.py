@@ -337,7 +337,7 @@ class Periscope(object):
                     return []
             basepath = os.path.splitext(entry)[0]
             # check for .xx.srt if needed
-            if self.languages:
+            if self.multi and self.languages:
                 if self.force:
                     return [(self.languages, [os.path.normpath(entry)])]
                 needed_languages = self.languages[:]
@@ -350,7 +350,7 @@ class Periscope(object):
                 return []
             # single subtitle download: .srt
             if self.force or not os.path.exists(basepath + '.srt'):
-                return [(None, [os.path.normpath(entry)])]
+                return [(self.languages, [os.path.normpath(entry)])]
         if os.path.isdir(entry): # a dir? recurse
             #TODO if hidden folder, don't keep going (how to handle windows/mac/linux ?)
             files = []
