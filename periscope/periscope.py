@@ -307,11 +307,11 @@ class Periscope(object):
         taskCount = 0
         for (filename, subsByFilename) in groupby(sorted(subtitles, key=lambda x: x["filename"]), lambda x: x["filename"]):
             if not self.multi:
-                self.taskQueue.put({'task': 'download', 'subtitle': sorted(list(subsByFilename), cmp=self._cmpSubtitles), 'periscope': self})
+                self.taskQueue.put({'task': 'download', 'subtitle': sorted(list(subsByFilename), cmp=self._cmpSubtitles), 'config': self.getConfigDict()})
                 taskCount += 1
                 continue
             for (language, subsByFilenameByLanguage) in groupby(sorted(subsByFilename, key=lambda x: x["lang"]), lambda x: x["lang"]):
-                self.taskQueue.put({'task': 'download', 'subtitle': sorted(list(subsByFilenameByLanguage), cmp=self._cmpSubtitles), 'periscope': self})
+                self.taskQueue.put({'task': 'download', 'subtitle': sorted(list(subsByFilenameByLanguage), cmp=self._cmpSubtitles), 'config': self.getConfigDict()})
                 taskCount += 1
         return taskCount
 
@@ -386,3 +386,12 @@ class Periscope(object):
         self.sendStopSignal()
         for worker in self.pool:
             worker.join()
+            
+    def getConfigDict(self):
+        ''' Produce a dict with configuration items. Used by plugins to read configuration '''
+        config = {}
+        config['multi'] = self.multi
+        config['cache_dir'] = self.cache_dir
+        config['subtitlesource_key'] = self.config.get('subtitlesource_key')
+        config['force'] = self.force
+        return config

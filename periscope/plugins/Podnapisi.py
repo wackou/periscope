@@ -82,8 +82,8 @@ class Podnapisi(PluginBase.PluginBase):
             "ca": "53",
             "id": "54"}
 
-    def __init__(self, periscope=None):
-        super(Podnapisi, self).__init__(self._plugin_languages, periscope)
+    def __init__(self, config_dict=None):
+        super(Podnapisi, self).__init__(self._plugin_languages, config_dict)
         # Podnapisi uses two reference for latin serbian and cyrillic serbian (36 and 47)
         # add the 36 manually as cyrillic seems to be more used
         self.revertPluginLanguages["36"] = "sr"

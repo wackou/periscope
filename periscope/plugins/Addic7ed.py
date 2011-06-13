@@ -65,8 +65,8 @@ class Addic7ed(PluginBase.PluginBase):
             u"Polish": "pl",
             u"Persian": "fa"}
 
-    def __init__(self, periscope=None):
-        super(Addic7ed, self).__init__(self._plugin_languages, periscope, isRevert=True)
+    def __init__(self, config_dict=None):
+        super(Addic7ed, self).__init__(self._plugin_languages, config_dict, isRevert=True)
         #http://www.addic7ed.com/serie/Smallville/9/11/Absolute_Justice
         self.release_pattern = re.compile(" \nVersion (.+), ([0-9]+).([0-9])+ MBs")
 

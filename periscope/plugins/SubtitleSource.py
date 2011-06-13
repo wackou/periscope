@@ -40,17 +40,10 @@ class SubtitleSource(PluginBase.PluginBase):
             "es": "Spanish",
             "is": "Icelandic"}
 
-    def __init__(self, periscope=None):
-        super(SubtitleSource, self).__init__(self._plugin_languages, periscope)
-        if periscope and periscope.plugins_config and "subtitlesource_key" in periscope.plugins_config:
-            self.server_url = self.server_url % periscope.plugins_config["subtitlesource_key"]
-        elif periscope and periscope.config_file:
-            config = ConfigParser.SafeConfigParser()
-            config.read(periscope.config_file)
-            if not config.get("SubtitleSource", "key"):
-                self.logger.error('You need to ask for a SubtitleSource API Key')
-                raise Exception('You need to ask for a SubtitleSource API Key')
-            self.server_url = self.server_url % config.get('SubtitleSource', 'key')
+    def __init__(self, config_dict=None):
+        super(SubtitleSource, self).__init__(self._plugin_languages, config_dict)
+        if config_dict and "subtitlesource_key" in config_dict:
+            self.server_url = self.server_url % config_dict["subtitlesource_key"]
         else:
             self.logger.error('SubtitleSource API Key is mandatory for this plugin')
             raise Exception('SubtitleSource API Key is mandatory for this plugin')

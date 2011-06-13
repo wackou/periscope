@@ -38,19 +38,19 @@ class PluginWorker(threading.Thread):
                     break
                 elif task['task'] == 'list': # the task is a listing
                     # get the corresponding plugin
-                    plugin = getattr(plugins, task['plugin'])(task['periscope'])
+                    plugin = getattr(plugins, task['plugin'])(task['config'])
                     # split tasks if the plugin can't handle multi-thing queries
                     splitedTasks = plugin.splitTask(task)
                     myTask = splitedTasks.pop()
                     for st in splitedTasks:
                         self.taskQueue.put(st)
-                    result = plugin.list(myTask['filenames'], myTask['languages'])
+                    result = plugin.list(myTask['filenames'], myTask['config'])
                 elif task['task'] == 'download': # the task is to download
                     result = None
                     while task['subtitle']:
                         subtitle = task['subtitle'].pop(0) 
                         # get the corresponding plugin
-                        plugin = getattr(plugins, subtitle["plugin"])(task['periscope'])
+                        plugin = getattr(plugins, subtitle["plugin"])(task['config'])
                         path = plugin.download(subtitle)
                         if path:
                             subtitle["subtitlepath"] = path

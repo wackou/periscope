@@ -43,13 +43,13 @@ class BierDopje(PluginBase.PluginBase):
         'hawaii five-0 2010': 14211}
     _plugin_languages = {'en': 'en', 'nl': 'nl'}
 
-    def __init__(self, periscope=None):
-        super(BierDopje, self).__init__(self._plugin_languages, periscope)
+    def __init__(self, config_dict):
+        super(BierDopje, self).__init__(self._plugin_languages, config_dict)
         #http://api.bierdopje.com/23459DC262C0A742/GetShowByName/30+Rock
         #http://api.bierdopje.com/23459DC262C0A742/GetAllSubsFor/94/5/1/en (30 rock, season 5, episode 1)
-        if not periscope or not periscope.cache_dir:
+        if not config_dict or not config_dict['cache_dir']:
              raise Exception('Cache directory is mandatory for this plugin')
-        self.showid_cache = os.path.join(periscope.cache_dir, "bierdopje_showid.cache")
+        self.showid_cache = os.path.join(config_dict['cache_dir'], "bierdopje_showid.cache")
         with self.lock:
             if not os.path.exists(self.showid_cache):
                 f = open(self.showid_cache, 'w')

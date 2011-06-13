@@ -35,8 +35,8 @@ class PluginBase(object):
 	lock = threading.Lock()
 
 	@abc.abstractmethod
-	def __init__(self, pluginLanguages, periscope=None, isRevert=False):
-		self.periscope = periscope
+	def __init__(self, pluginLanguages, config_dict=None, isRevert=False):
+		self.config_dict = config_dict
 		if not pluginLanguages:
 			self.pluginLanguages = None
 			self.revertPluginLanguages = None
@@ -122,7 +122,7 @@ class PluginBase(object):
 			self.logger.warn("Ooops, you found a missing language in the configuration file of %s: %s. Send a bug report to have it added." % (self.getClassName(), language))
 
 	def getExtension(self, subtitle):
-		if self.periscope.multi:
+		if self.config_dict['multi']:
 			return ".%s.srt" % subtitle['lang']
 		return ".srt"
 

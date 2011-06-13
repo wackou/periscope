@@ -67,8 +67,8 @@ class SubScene(PluginBase.PluginBase):
             "ku": "Kurdish",
             "et": "Estonian"}
 
-    def __init__(self, periscope=None):
-        super(SubScene, self).__init__(self._plugin_languages, periscope)
+    def __init__(self, config_dict=None):
+        super(SubScene, self).__init__(self._plugin_languages, config_dict)
         #http://subscene.com/s.aspx?subtitle=Dexter.S04E01.HDTV.XviD-NoTV
 
     def list(self, filenames, languages):

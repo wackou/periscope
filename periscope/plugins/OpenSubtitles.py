@@ -82,8 +82,8 @@ class OpenSubtitles(PluginBase.PluginBase):
             "uk": "ukr",
             "vi": "vie"}
     
-    def __init__(self, periscope=None):
-        super(OpenSubtitles, self).__init__(self._plugin_languages, periscope)
+    def __init__(self, config_dict=None):
+        super(OpenSubtitles, self).__init__(self._plugin_languages, config_dict)
 
     def list(self, filenames, languages):
         ''' Main method to call when you want to list subtitles '''

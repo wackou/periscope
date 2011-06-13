@@ -49,8 +49,8 @@ class TheSubDB(PluginBase.PluginBase):
             'sv': 'sv',
             'tr': 'tr'}
 
-    def __init__(self, periscope=None):
-        super(TheSubDB, self).__init__(self._plugin_languages, periscope)
+    def __init__(self, config_dict=None):
+        super(TheSubDB, self).__init__(self._plugin_languages, config_dict)
             
     def list(self, filenames, languages):
         ''' Main method to call when you want to list subtitles '''
