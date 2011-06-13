@@ -80,9 +80,21 @@ class Addic7ed(PluginBase.PluginBase):
         guess = guessit.guess_file_info(filepath, 'autodetect')
         if guess['type'] != 'episode':
             return []
-        return self.query(guess['series'], guess['season'], guess['episodeNumber'], guess['releaseGroup'], filepath, languages)
+        # add multiple things to the release group set
+        release_group = set()
+        if 'releaseGroup' in guess:
+            release_group.add(guess['releaseGroup'])
+        else:
+            if 'title' in guess: 
+                release_group.add(guess['title'])
+            if 'screenSize' in guess:
+                release_group.add(guess['screenSize'])
+        if len(release_group) == 0:
+            return []
+        self.release_group = release_group # used to sort results
+        return self.query(guess['series'], guess['season'], guess['episodeNumber'], release_group, filepath, languages)
 
-    def query(self, name, season, episode, team, filepath, languages=None):
+    def query(self, name, season, episode, release_group, filepath, languages=None):
         ''' Make a query and returns info about found subtitles '''
         searchname = name.lower().replace(" ", "_")
         searchurl = "%s/serie/%s/%s/%s/%s" % (self.server_url, searchname, season, episode, searchname)
@@ -102,7 +114,7 @@ class Addic7ed(PluginBase.PluginBase):
             if not self.release_pattern.match(str(html_sub.contents[1])): # On not needed soup td result
                 continue
             sub_teams = self.listTeams([self.release_pattern.match(str(html_sub.contents[1])).groups()[0]], [".", "_", " "])
-            if not team in sub_teams: # On wrong team
+            if not release_group.intersection(sub_teams): # On wrong team
                 continue
             html_language = html_sub.findNext("td", {"class" : "language"})
             sub_language = self.getRevertLanguage(html_language.contents[0].strip().replace('&nbsp;', ''))
@@ -121,14 +133,15 @@ class Addic7ed(PluginBase.PluginBase):
             result["page"] = searchurl
             result["filename"] = filepath
             result["plugin"] = self.getClassName()
+            result["teams"] = sub_teams # used to sort
             sublinks.append(result)
-        #TODO: Sort subtitles in order of... what? Download count? Last updated?
+        sublinks.sort(self._cmpTeams)
         return sublinks
 
     def listTeams(self, subteams, separators):
         for sep in separators:
             subteams = self.splitTeam(subteams, sep)
-        return subteams
+        return set(subteams)
 
     def splitTeam(self, subteams, sep):
         teams = []
@@ -145,3 +158,13 @@ class Addic7ed(PluginBase.PluginBase):
         srtfilename = srtbasefilename + self.getExtension(subtitle)
         self.downloadFile(suburl, srtfilename)
         return srtfilename
+    
+    def _cmpTeams(self, x, y):
+        ''' Sort based on teams matching '''
+        x_intersect_len = len(x['teams'].intersection(self.release_group))
+        y_intersect_len = len(y['teams'].intersection(self.release_group))
+        if x_intersect_len < y_intersect_len:
+            return 1
+        if x_intersect_len > y_intersect_len:
+            return -1
+        return 0
