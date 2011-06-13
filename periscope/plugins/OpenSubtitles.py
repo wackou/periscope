@@ -21,6 +21,7 @@ import gzip
 import os
 import socket
 import xmlrpclib
+import guessit
 
 class OpenSubtitles(PluginBase.PluginBase):
     site_url = 'http://www.opensubtitles.org'
@@ -124,7 +125,13 @@ class OpenSubtitles(PluginBase.PluginBase):
             search['sublanguageid'] = ",".join([self.getLanguage(l) for l in languages])
         if not imdbID and not moviehash and not bytesize and not languages:
             self.logger.debug("No search term, we'll use the filename")
-            search['query'] = self.guessFileData(filename)['name']
+            guess = guessit.guess_file_info(filepath, 'autodetect')
+            if guess['type'] == 'episode':
+                search['query'] = guess['series']
+            elif guess['type'] == 'movie':
+                search['query'] = guess['title']
+            else: # we don't know what we have
+                return[]
         # login
         self.server = xmlrpclib.Server(self.server_url)
         socket.setdefaulttimeout(self.timeout)
@@ -169,7 +176,8 @@ class OpenSubtitles(PluginBase.PluginBase):
             result["lang"] = self.getRevertLanguage(r['SubLanguageID'])
             result["filename"] = filepath
             result["plugin"] = self.getClassName()
-            if search.has_key("query") and not r["MovieReleaseName"].startswith(self.filename): # using the guessed file name, let's skip some results
+            #TODO: Change that to use something from guessit? Filename can be matched with SubFileName and Movie name can be matched with MovieReleaseName
+            if 'query' in search and not r["MovieReleaseName"].startswith(self.filename): # using the guessed file name, let's skip some results
                 self.logger.debug("Skipping %s because release '%s' does not start with %s" % (result["release"], r["MovieReleaseName"], self.filename))
                 continue
             sublinks.append(result)
