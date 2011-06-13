@@ -128,7 +128,7 @@ class PluginBase(object):
 			self.logger.warn("Ooops, you found a missing language in the configuration file of %s: %s. Send a bug report to have it added." % (self.getClassName(), language))
 
 	def getExtension(self, subtitle):
-		if self.config_dict['multi']:
+		if self.config_dict and self.config_dict['multi']:
 			return ".%s.srt" % subtitle['lang']
 		return ".srt"
 
