@@ -74,14 +74,13 @@ class Addic7ed(PluginBase.PluginBase):
         ''' Main method to call when you want to list subtitles '''
         # as self.multi_filename_queries is false, we won't have multiple filenames in the list so pick the only one
         # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
-        filepath = filenames[0]
-        fname = unicode(self.getFileName(filepath).lower())
-        guess = guessit.guess_file_info(filepath, 'autodetect')
-        self.logger.debug(guess.nice_string())
-        if guess['type'] == 'episode':
-            return self.query(guess['series'], guess['season'], guess['episodeNumber'], guess['releaseGroup'], filepath, languages)
-        else:
+        if not self.checkLanguages(languages):
             return []
+        filepath = filenames[0]
+        guess = guessit.guess_file_info(filepath, 'autodetect')
+        if guess['type'] != 'episode':
+            return []
+        return self.query(guess['series'], guess['season'], guess['episodeNumber'], guess['releaseGroup'], filepath, languages)
 
     def query(self, name, season, episode, team, filepath, languages=None):
         ''' Make a query and returns info about found subtitles '''
@@ -123,6 +122,7 @@ class Addic7ed(PluginBase.PluginBase):
             result["filename"] = filepath
             result["plugin"] = self.getClassName()
             sublinks.append(result)
+        #TODO: Sort subtitles in order of... what? Download count? Last updated?
         return sublinks
 
     def listTeams(self, subteams, separators):

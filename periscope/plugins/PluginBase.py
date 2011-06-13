@@ -114,6 +114,12 @@ class PluginBase(object):
 		except KeyError, e:
 			self.logger.warn("Ooops, you found a missing language in the configuration file of %s: %s. Send a bug report to have it added." % (self.getClassName(), language))
 
+	def checkLanguages(self, languages):
+		if languages and not set(languages).intersection((self._plugin_languages.values())):
+			self.logger.debug('None of requested languages %s are available' % languages)
+			return False
+		return True
+
 	def getLanguage(self, language):
 		''' Returns the long naming of the language from a two character code '''
 		try:

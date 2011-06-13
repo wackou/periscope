@@ -17,6 +17,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 from xml.dom import minidom
+import guessit
 import PluginBase
 import os
 import pickle
@@ -63,16 +64,13 @@ class BierDopje(PluginBase.PluginBase):
         ''' Main method to call when you want to list subtitles '''
         # as self.multi_filename_queries is false, we won't have multiple filenames in the list so pick the only one
         # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
+        if not self.checkLanguages(languages):
+            return []
         filepath = filenames[0]
-        fname = self.getFileName(filepath)
-        subs = self.query(fname, filepath, languages)
-        if not subs and fname.rfind(".[") > 0:
-            # Try to remove the [VTV] or [EZTV] at the end of the file
-            teamless_filename = fname[0 : fname.rfind(".[")]
-            subs = self.query(teamless_filename, filepath, languages)
-            return subs
-        else:
-            return subs
+        guess = guessit.guess_file_info(filepath, 'autodetect')
+        if guess['type'] != 'episode':
+            return []
+        return self.query(guess['series'], guess['season'], guess['episodeNumber'], guess['releaseGroup'], filepath, languages)
 
     def download(self, subtitle):
         ''' Main method to call when you want to download a subtitle '''
@@ -80,60 +78,57 @@ class BierDopje(PluginBase.PluginBase):
         self.downloadFile(subtitle["link"], subpath)
         return subpath
 
-    def query(self, token, filepath, languages=None):
+    def query(self, name, season, episode, releaseGroup, filepath, languages=None):
         ''' Makes a query and returns info (link, lang) about found subtitles '''
-        guessedData = self.guessFileData(token)
-        self.logger.debug("Data: %s" % guessedData)
-        if guessedData['type'] != "tvshow":
-            return []
-        elif languages and not set(languages).intersection((self._plugin_languages.values())):
-            return []
-            
-        if not languages :
-            available_languages = self._plugin_languages.values()
-        else :
+        if languages:
             available_languages = list(set(languages).intersection((self._plugin_languages.values())))
+        else:
+            available_languages = self._plugin_languages.values()
         sublinks = []
-        # query the show to get the show id
-        showName = guessedData['name'].lower()
-        if self.exceptions.has_key(showName):
-            show_id = self.exceptions.get(showName)
-        elif self.showids.has_key(showName):
-            show_id = self.showids.get(showName)
-        else :
-            getShowId_url = "%sGetShowByName/%s" % (self.server_url, urllib.quote(showName))
-            self.logger.debug("Looking for show id %s" % getShowId_url)
-            page = urllib2.urlopen(getShowId_url)
+
+        # get the show id
+        show_name = name.lower()
+        if show_name in self.exceptions: # get it from exceptions
+            show_id = self.exceptions[show_name]
+        elif show_name in self.showids: # get it from cache
+            show_id = self.showids[show_name]
+        else: # retrieve it
+            show_id_url = "%sGetShowByName/%s" % (self.server_url, urllib.quote(show_name))
+            self.logger.debug("Retrieving show id from web at %s" % show_id_url)
+            page = urllib2.urlopen(show_id_url)
             dom = minidom.parse(page)
-            if not dom or len(dom.getElementsByTagName('showid')) == 0 :
+            if not dom or len(dom.getElementsByTagName('showid')) == 0: # no proper result
                 page.close()
                 return []
             show_id = dom.getElementsByTagName('showid')[0].firstChild.data
-            self.showids[showName] = show_id
+            self.showids[show_name] = show_id
             with self.lock:
                 f = open(self.showid_cache, 'w')
                 pickle.dump(self.showids, f)
                 f.close()
             page.close()
-        # query the episode to get the subs
-        for lang in available_languages :
-            getAllSubs_url = "%sGetAllSubsFor/%s/%s/%s/%s" % (self.server_url, show_id, guessedData['season'], guessedData['episode'], lang)
-            self.logger.debug("BierDopje looking for subtitles %s" % getAllSubs_url)
-            page = urllib2.urlopen(getAllSubs_url)
+
+        # get the subs for the show id we have
+        for language in available_languages :
+            subs_url = "%sGetAllSubsFor/%s/%s/%s/%s" % (self.server_url, show_id, season, episode, language)
+            self.logger.debug("Getting subtitles at %s" % subs_url)
+            page = urllib2.urlopen(subs_url)
             dom = minidom.parse(page)
             page.close()
             for sub in dom.getElementsByTagName('result'):
-                release = sub.getElementsByTagName('filename')[0].firstChild.data
-                if release.endswith(".srt"):
-                    release = release[:-4]
-                dllink = sub.getElementsByTagName('downloadlink')[0].firstChild.data
-                self.logger.debug("Release %s found while searching for %s" % (release.lower(), token.lower()))
-                if release.lower() == token.lower():
+                sub_release = sub.getElementsByTagName('filename')[0].firstChild.data
+                if sub_release.endswith(".srt"):
+                    sub_release = sub_release[:-4]
+                sub_release = sub_release + '.avi' # put a random extension for guessit not to fail guessing that file
+                sub_guess = guessit.guess_file_info(sub_release, 'episode')
+                sub_link = sub.getElementsByTagName('downloadlink')[0].firstChild.data
+                if sub_guess['series'] == name and sub_guess['season'] == season and sub_guess['episodeNumber'] == episode and sub_guess['releaseGroup'] == releaseGroup:
+                    self.logger.debug("Found a match: %s" % sub_release)
                     result = {}
-                    result["release"] = release
-                    result["link"] = dllink
-                    result["page"] = dllink
-                    result["lang"] = lang
+                    result["release"] = sub_release
+                    result["link"] = sub_link
+                    result["page"] = sub_link
+                    result["lang"] = language
                     result["filename"] = filepath
                     result["plugin"] = self.getClassName()
                     sublinks.append(result)
