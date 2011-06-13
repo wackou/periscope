@@ -93,26 +93,20 @@ class Podnapisi(PluginBase.PluginBase):
         # as self.multi_filename_queries is false, we won't have multiple filenames in the list so pick the only one
         # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
         filepath = filenames[0]
-        if os.path.isfile(filepath):
-            filehash = self.hashFile(filepath)
-            size = os.path.getsize(filepath)
-            fname = self.getFileName(filepath)
-            return self.query(moviehash=filehash, languages=languages, bytesize=size, filename=fname)
-        else:
-            fname = self.getFileName(filepath)
-            return self.query(languages=languages, filename=fname)
+        if not os.path.isfile(filepath):
+            return []
+        return self.query(self.hashFile(filepath), languages) 
     
     def download(self, subtitle):
         return []
     
-    def query(self, filename, imdbID=None, moviehash=None, bytesize=None, languages=None):
+    def query(self, moviehash, languages=None):
         ''' Makes a query on podnapisi and returns info (link, lang) about found subtitles '''
-        
         # login
         self.server = xmlrpclib.Server(self.server_url)
         socket.setdefaulttimeout(self.timeout)
         try:
-            log_result = self.server.initiate("Periscope")
+            log_result = self.server.initiate(self.user_agent)
             self.logger.debug("Result: %s" % log_result)
             token = log_result["session"]
             nonce = log_result["nonce"]
@@ -125,24 +119,23 @@ class Podnapisi(PluginBase.PluginBase):
         hash = md5()
         hash.update(password)
         password = hash.hexdigest()
-
         hash = sha256()
         hash.update(password)
         hash.update(nonce)
         password = hash.hexdigest()
         self.server.authenticate(token, username, password)
-        #self.server.authenticate(token, '', '')
-        self.logger.debug("Authenticated. Starting search")
+        self.logger.debug('Authenticated')
+        #if languages:
+        #    self.logger.debug([self.getLanguage(l) for l in languages])
+        #    self.server.setFilters(token, [self.getLanguage(l) for l in languages])
+        #    self.logger.debug('Filers set for languages %s' % languages)
+        self.logger.debug("Starting search with token %s and hashs %s" %(token, [moviehash]))
         results = self.server.search(token, [moviehash])
-        return []
+        return results
         subs = []
         for sub in results['results']:
             subs.append(sub)
-            print sub
-            
-        print "Try a download"
         d = self.server.download(token, [173793])
-        print d
         self.server.terminate(token)
         return subs
         
