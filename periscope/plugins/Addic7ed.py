@@ -118,7 +118,7 @@ class Addic7ed(PluginBase.PluginBase):
                 continue
             html_language = html_sub.findNext("td", {"class" : "language"})
             sub_language = self.getRevertLanguage(html_language.contents[0].strip().replace('&nbsp;', ''))
-            if languages and  not sub_language in languages: # On wrong language
+            if languages and not sub_language in languages: # On wrong language
                 continue
             html_status = html_language.findNextSibling('td')
             sub_status = html_status.find('b').string.strip()
@@ -137,17 +137,6 @@ class Addic7ed(PluginBase.PluginBase):
             sublinks.append(result)
         sublinks.sort(self._cmpTeams)
         return sublinks
-
-    def listTeams(self, subteams, separators):
-        for sep in separators:
-            subteams = self.splitTeam(subteams, sep)
-        return set(subteams)
-
-    def splitTeam(self, subteams, sep):
-        teams = []
-        for t in subteams:
-            teams += t.split(sep)
-        return teams
 
     def download(self, subtitle):
         '''pass the URL of the sub and the file it matches, will unzip it

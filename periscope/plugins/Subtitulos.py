@@ -75,8 +75,8 @@ class Subtitulos(PluginBase.PluginBase):
     def query(self, name, season, episode, release_group, filepath, languages=None):
         ''' Make a query and returns info about found subtitles '''
         sublinks = []
-        name = name.lower().replace(" ", "-")
-        searchurl = "%s/%s/%sx%.2d" %(self.server_url, name, season, episode)
+        searchname = name.lower().replace(" ", "-")
+        searchurl = "%s/%s/%sx%.2d" %(self.server_url, searchname, season, episode)
         self.logger.debug("Searching in %s" % searchurl)
         try:
             req = urllib2.Request(searchurl, headers={'User-Agent': self.user_agent})
@@ -97,7 +97,7 @@ class Subtitulos(PluginBase.PluginBase):
             self.logger.debug("Team from file: %s" % release_group)
             for html_language in subs.findAllNext("ul", {"class": "sslist"}):
                 sub_language = self.getRevertLanguage(html_language.findNext("li", {"class": "li-idioma"}).find("strong").contents[0].string.strip())
-                if languages and  not sub_language in languages: # On wrong language
+                if languages and not sub_language in languages: # On wrong language
                     continue
                 html_status = html_language.findNext("li",{"class": "li-estado green"})
                 sub_status = html_status.contents[0].string.strip()
@@ -105,7 +105,7 @@ class Subtitulos(PluginBase.PluginBase):
                     continue
                 sub_link = html_status.findNext("span", {"class": "descargar green"}).find("a")["href"]
                 result = {}
-                result["release"] = "%s.S%.2dE%.2d.%s" %(name.replace("-", ".").title(), int(season), int(episode), '.'.join(sub_teams))
+                result["release"] = "%s.S%.2dE%.2d.%s" %(name.replace(" ", "."), int(season), int(episode), '.'.join(sub_teams))
                 result["lang"] = sub_language
                 result["link"] = sub_link
                 result["page"] = searchurl
@@ -115,17 +115,6 @@ class Subtitulos(PluginBase.PluginBase):
                 sublinks.append(result)
         sublinks.sort(self._cmpTeams)
         return sublinks
-        
-    def listTeams(self, sub_teams, separators):
-        for sep in separators:
-            sub_teams = self.splitTeam(sub_teams, sep)
-        return set(sub_teams)
-    
-    def splitTeam(self, sub_teams, sep):
-        teams = []
-        for t in sub_teams:
-            teams += t.split(sep)
-        return teams
 
     def download(self, subtitle):
         '''pass the URL of the sub and the file it matches, will unzip it

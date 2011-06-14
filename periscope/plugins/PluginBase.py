@@ -162,3 +162,16 @@ class PluginBase(object):
 						newElement[key] = [v]
 				results.append(newElement)
 		return results
+
+	def listTeams(self, sub_teams, separators):
+		''' List teams of a given string using separators '''
+		for sep in separators:
+			sub_teams = self.splitTeam(sub_teams, sep)
+		return set(sub_teams)
+
+	def splitTeam(self, sub_teams, sep):
+		''' Split teams of a given string using separators '''
+		teams = []
+		for t in sub_teams:
+			teams += t.split(sep)
+		return teams
