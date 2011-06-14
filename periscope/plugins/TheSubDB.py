@@ -28,7 +28,7 @@ class TheSubDB(PluginBase.PluginBase):
     multi_languages_queries = True
     multi_filename_queries = False
     api_based = True
-    user_agent = 'SubDB/1.0 (Periscope/0.1; http://code.google.com/p/periscope/)' # defined by the API
+    user_agent = 'SubDB/1.0 (Periscope-ng/0.1; https://github.com/Diaoul/periscope-ng)' # defined by the API
     _plugin_languages = {'cs': 'cs', # the whole list is available with the API: http://sandbox.thesubdb.com/?action=languages
             'da': 'da',
             'de': 'de',
@@ -51,22 +51,30 @@ class TheSubDB(PluginBase.PluginBase):
 
     def __init__(self, config_dict=None):
         super(TheSubDB, self).__init__(self._plugin_languages, config_dict)
-            
+  
     def list(self, filenames, languages):
         ''' Main method to call when you want to list subtitles '''
         # as self.multi_filename_queries is false, we won't have multiple filenames in the list so pick the only one
         # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
         filepath = filenames[0]
-        filehash = self.get_hash(filepath)
-        search_url = "%s/?action=%s&hash=%s" % (self.server_url, "search", filehash)
-        self.logger.debug('Query URL: %s' % search_url)
-        req = urllib2.Request(search_url, headers={'User-Agent': self.user_agent})
+        if not os.path.isfile(filepath):
+            return []
+        return self.query(filepath, self.hashFile(filepath), languages)
+
+    def query(self, filepath, moviehash, languages=None):
+        searchurl = "%s/?action=%s&hash=%s" % (self.server_url, "search", moviehash)
+        self.logger.debug('Query URL: %s' % searchurl)
         try:
+            req = urllib2.Request(searchurl, headers={'User-Agent': self.user_agent})
             page = urllib2.urlopen(req, timeout=self.timeout)
-        except urllib2.HTTPError, e:
-            if e.code == 404:
+        except urllib2.HTTPError as inst:
+            if inst.code == 404: # no result found
                 return []
-            raise
+            self.logger.error("Error: %s - %s" % (searchurl, inst))
+            return []
+        except urllib2.URLError as inst:
+            self.logger.error("TimeOut: %s" % inst)
+            return []
         available_languages = page.readlines()[0].split(',')
         self.logger.debug('Available languages: %s' % available_languages)
         subs = []
@@ -75,14 +83,14 @@ class TheSubDB(PluginBase.PluginBase):
                 result = {}
                 result['release'] = filepath
                 result['lang'] = l
-                result['link'] = "%s/?action=download&hash=%s&language=%s" % (self.server_url, filehash, l)
+                result['link'] = "%s/?action=download&hash=%s&language=%s" % (self.server_url, moviehash, l)
                 result['page'] = result['link']
                 result['filename'] = filepath
                 result['plugin'] = self.getClassName()
                 subs.append(result)
         return subs
 
-    def get_hash(self, name):
+    def hashFile(self, name):
         ''' This hash function receives the filename and returns the hash code '''
         readsize = 64 * 1024
         with open(name, 'rb') as f:
