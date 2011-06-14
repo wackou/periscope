@@ -47,8 +47,6 @@ class SubtitleSource(PluginBase.PluginBase):
         else:
             self.logger.error('SubtitleSource API Key is mandatory for this plugin')
             raise Exception('SubtitleSource API Key is mandatory for this plugin')
-        #http://www.subtitlesource.org/api/KEY/3.0/xmlsearch/Heroes.S03E09.HDTV.XviD-LOL/all/0
-        #http://www.subtitlesource.org/api/KEY/3.0/xmlsearch/heroes/swedish/0
             
     def list(self, filenames, languages):
         ''' Main method to call when you want to list subtitles '''
