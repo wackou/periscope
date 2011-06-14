@@ -16,10 +16,13 @@
 #    along with emesene; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+from Addic7ed import Addic7ed
 from BierDopje import BierDopje
 from OpenSubtitles import OpenSubtitles
 #from Podnapisi import Podnapisi
-from SubtitleSource import SubtitleSource
+#from SubScene import SubScene
+from SubsWiki import SubsWiki
+#from SubtitleSource import SubtitleSource
+from Subtitulos import Subtitulos
 from TheSubDB import TheSubDB
-from SubScene import SubScene
-from Addic7ed import Addic7ed
+from TVSubtitles import TVSubtitles
