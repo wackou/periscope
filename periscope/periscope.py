@@ -295,7 +295,7 @@ class Periscope(object):
                 logger.debug(traceback.print_exc())
                 continue
             # split tasks if the plugin can't handle multi-thing queries
-            tasks.extend(plugin.splitTask({'task': 'list', 'plugin': pluginName, 'languages': languages, 'filenames': filenames, 'periscope': self}))
+            tasks.extend(plugin.splitTask({'task': 'list', 'plugin': pluginName, 'languages': languages, 'filenames': filenames, 'config': self.getConfigDict()}))
         for t in tasks:
             self.taskQueue.put(t)
         return len(tasks)
