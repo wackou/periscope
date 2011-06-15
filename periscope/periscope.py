@@ -392,6 +392,9 @@ class Periscope(object):
         config = {}
         config['multi'] = self.multi
         config['cache_dir'] = self.cache_dir
-        config['subtitlesource_key'] = self.config.get('subtitlesource_key')
+        if self.config:
+            config['subtitlesource_key'] = self.config.get('SubtitleSource', 'key')
+        if self.plugins_config and 'subtitlesource_key' in self.plugins_config:
+            config['subtitlesource_key'] = self.plugins_config['subtitlesource_key']
         config['force'] = self.force
         return config
