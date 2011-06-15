@@ -25,4 +25,4 @@ from SubsWiki import SubsWiki
 #from SubtitleSource import SubtitleSource
 from Subtitulos import Subtitulos
 from TheSubDB import TheSubDB
-from TVSubtitles import TVSubtitles
+#from TvSubtitles import TvSubtitles
