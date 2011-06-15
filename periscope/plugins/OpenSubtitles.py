@@ -123,7 +123,7 @@ class OpenSubtitles(PluginBase.PluginBase):
             search['moviebytesize'] = str(bytesize)
         if languages:
             search['sublanguageid'] = ",".join([self.getLanguage(l) for l in languages])
-        if not imdbID and not moviehash and not bytesize and not languages:
+        if not imdbID and not moviehash and not bytesize:
             self.logger.debug("No search term, we'll use the filename")
             guess = guessit.guess_file_info(filepath, 'autodetect')
             if guess['type'] == 'episode':
@@ -164,11 +164,9 @@ class OpenSubtitles(PluginBase.PluginBase):
             return []
         if not results['data']: # no subtitle found
             return []
-        # hash function is not robust so we'll use the MovieReleaseName to help us select the best candidate
         sublinks = []
         self.filename = self.getFileName(filepath)
-        for r in sorted(results['data'], self._cmpMovieReleaseName):
-            # only add if the MovieReleaseName matches the file
+        for r in sorted(results['data'], self._cmpSubFileName):
             result = {}
             result["release"] = r['SubFileName']
             result["link"] = r['SubDownloadLink']
@@ -176,20 +174,19 @@ class OpenSubtitles(PluginBase.PluginBase):
             result["lang"] = self.getRevertLanguage(r['SubLanguageID'])
             result["filename"] = filepath
             result["plugin"] = self.getClassName()
-            #TODO: Change that to use something from guessit? Filename can be matched with SubFileName and Movie name can be matched with MovieReleaseName
-            if 'query' in search and not r["MovieReleaseName"].startswith(self.filename): # using the guessed file name, let's skip some results
-                self.logger.debug("Skipping %s because release '%s' does not start with %s" % (result["release"], r["MovieReleaseName"], self.filename))
+            if 'query' in search and not r["MovieReleaseName"].replace('.', ' ').startswith(search['query']): # query mode search, filter results
+                self.logger.debug("Skipping %s it does not start with %s" %(r["MovieReleaseName"].replace('.', ' '), search['query']))
                 continue
             sublinks.append(result)
         return sublinks
 
-    def _cmpMovieReleaseName(self, x, y):
-        ''' Sort based on the MovieReleaseName name tag '''
+    def _cmpSubFileName(self, x, y):
+        ''' Sort based on the SubFileName name tag '''
         #TODO add also support for subtitles release
-        xmatch = x['MovieReleaseName'] and (x['MovieReleaseName'].find(self.filename) > -1 or self.filename.find(x['MovieReleaseName']) > -1)
-        ymatch = y['MovieReleaseName'] and (y['MovieReleaseName'].find(self.filename) > -1 or self.filename.find(y['MovieReleaseName']) > -1)
+        xmatch = x['SubFileName'] and (x['SubFileName'].find(self.filename) > -1 or self.filename.find(x['SubFileName']) > -1)
+        ymatch = y['SubFileName'] and (y['SubFileName'].find(self.filename) > -1 or self.filename.find(y['SubFileName']) > -1)
         if xmatch and ymatch:
-            if x['MovieReleaseName'] == self.filename or x['MovieReleaseName'].startswith(self.filename) :
+            if x['SubFileName'] == self.filename or x['SubFileName'].startswith(self.filename) :
                 return - 1
             return 0
         if not xmatch and not ymatch:
