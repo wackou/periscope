@@ -44,7 +44,7 @@ class PluginWorker(threading.Thread):
                     myTask = splitedTasks.pop()
                     for st in splitedTasks:
                         self.taskQueue.put(st)
-                    result = plugin.list(myTask['filenames'], myTask['config'])
+                    result = plugin.list(myTask['filenames'], myTask['languages'])
                 elif task['task'] == 'download': # the task is to download
                     result = None
                     while task['subtitle']:
