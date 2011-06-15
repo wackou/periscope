@@ -45,13 +45,21 @@ class OpenSubtitlesQueryTestCase(unittest.TestCase):
         print results
         assert len(results) > 0
 
+class OpenSubtitlesQueryNoHashTestCase(unittest.TestCase):
+    def runTest(self):
+        import OpenSubtitles
+        plugin = OpenSubtitles.OpenSubtitles()
+        results = plugin.query('Night.Watch.2004.CD1.DVDRiP.XViD-FiCO.avi', languages=['en', 'fr']) # http://trac.opensubtitles.org/projects/opensubtitles/wiki/XMLRPC
+        print results
+        assert len(results) > 0
+
 class OpenSubtitlesListTestCase(unittest.TestCase):
     def runTest(self):
         import OpenSubtitles
         plugin = OpenSubtitles.OpenSubtitles()
         results = plugin.download(plugin.query('/tmp/Night.Watch.2004.CD1.DVDRiP.XViD-FiCO.avi', moviehash="09a2c497663259cb", bytesize="733589504")[0]) # http://trac.opensubtitles.org/projects/opensubtitles/wiki/XMLRPC
         assert len(results) > 0
-
+'''
 class PodnapisiQueryTestCase(unittest.TestCase):
     def runTest(self):
         import Podnapisi
@@ -83,7 +91,7 @@ class SubtitleSourceListTestCase(unittest.TestCase):
         results = plugin.list(["PrisM-Inception.2010"], ['en', 'fr'])
         print results
         assert len(results) > 0, "No result could be found for PrisM-Inception.2010"
-
+'''
 class SubtitulosListTestCase(unittest.TestCase):
     def runTest(self):
         import Subtitulos
