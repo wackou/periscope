@@ -82,7 +82,7 @@ class OpenSubtitles(PluginBase.PluginBase):
             "tr": "tur",
             "uk": "ukr",
             "vi": "vie"}
-    
+
     def __init__(self, config_dict=None):
         super(OpenSubtitles, self).__init__(self._plugin_languages, config_dict)
 
@@ -90,6 +90,8 @@ class OpenSubtitles(PluginBase.PluginBase):
         ''' Main method to call when you want to list subtitles '''
         # as self.multi_filename_queries is false, we won't have multiple filenames in the list so pick the only one
         # once multi-filename queries are implemented, set multi_filename_queries to true and manage a list of multiple filenames here
+        if isinstance(filenames, basestring):
+            filenames = [ filenames ]
         filepath = filenames[0]
         if os.path.isfile(filepath):
             filehash = self.hashFile(filepath)
@@ -97,17 +99,12 @@ class OpenSubtitles(PluginBase.PluginBase):
             return self.query(moviehash=filehash, languages=languages, bytesize=size, filepath=filepath)
         else:
             return self.query(languages=languages, filepath=filepath)
-    
+
     def download(self, subtitle):
         ''' Main method to call when you want to download a subtitle '''
         subtitleFilename = subtitle["filename"].rsplit(".", 1)[0] + self.getExtension(subtitle)
-        self.downloadFile(subtitle["link"], subtitleFilename + ".gz")
-        f = gzip.open(subtitleFilename + ".gz")
-        dump = open(subtitleFilename, "wb")
-        dump.write(f.read())
-        dump.close()
-        f.close()
-        os.remove(subtitleFilename + ".gz")
+        subtext = self.downloadText(subtitle["link"])
+        open(subtitleFilename, "wb").write(result)
         return subtitleFilename
 
     def query(self, filepath, imdbID=None, moviehash=None, bytesize=None, languages=None):
@@ -124,7 +121,7 @@ class OpenSubtitles(PluginBase.PluginBase):
         if languages:
             search['sublanguageid'] = ",".join([self.getLanguage(l) for l in languages])
         if not imdbID and not moviehash and not bytesize:
-            self.logger.debug("No search term, we'll use the filename")
+            self.logger.debug("No search term, we'll use the filename: %s" % filepath)
             guess = guessit.guess_file_info(filepath, 'autodetect')
             if guess['type'] == 'episode':
                 search['query'] = guess['series']
