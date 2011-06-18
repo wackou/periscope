@@ -24,6 +24,8 @@ import sys
 import urllib2
 import struct
 import threading
+import gzip, zipfile
+import cStringIO as StringIO
 
 class PluginBase(object):
 	__metaclass__ = abc.ABCMeta
@@ -47,7 +49,7 @@ class PluginBase(object):
 			self.revertPluginLanguages = pluginLanguages
 			self.pluginLanguages = dict((v, k) for k, v in self.revertPluginLanguages.iteritems())
 		self.logger = logging.getLogger('periscope.%s' % self.getClassName())
-		
+
 	@staticmethod
 	def getFileName(filepath):
 		filename = filepath
@@ -60,7 +62,7 @@ class PluginBase(object):
 	def hashFile(self, filename):
 		''' Calculates the Hash à-la Media Player Classic as it is the hash used by OpenSubtitles.
 		By the way, this is not a very robust hash code. '''
-		longlongformat = 'q'  # long long 
+		longlongformat = 'q'  # long long
 		bytesize = struct.calcsize(longlongformat)
 		f = open(filename, "rb")
 		filesize = os.path.getsize(filename)
@@ -85,19 +87,65 @@ class PluginBase(object):
 
 	def downloadFile(self, url, filename, data=None):
 		''' Downloads the given url to the given filename '''
-		try:
-			self.logger.info("Downloading %s" % url)
-			req = urllib2.Request(url, headers={'Referer': url, 'User-Agent': self.user_agent})
-			f = urllib2.urlopen(req, data=data)
-			dump = open(filename, "wb")
-			dump.write(f.read())
-			dump.close()
-			f.close()
-			self.logger.debug("Download finished for file %s. Size: %s" % (filename, os.path.getsize(filename)))
-		except urllib2.HTTPError, e:
-			self.logger.error("HTTP Error:", e.code , url)
-		except urllib2.URLError, e:
-			self.logger.error("URL Error:", e.reason , url)
+                open(filename, 'wb').write(self._downloadText(url, data))
+                self.logger.debug("Download finished for file %s. Size: %s" % (filename, os.path.getsize(filename)))
+
+
+        def _downloadText(self, url, data = None):
+                ''' Downloads the given url and return it as a string '''
+                self.logger.info("Downloading %s" % url)
+                try:
+                        req = urllib2.Request(url, headers={'Referer': url, 'User-Agent': self.user_agent})
+                        f = urllib2.urlopen(req, data=data)
+                        result = f.read()
+                        f.close()
+                        return result
+                except urllib2.HTTPError, e:
+                        self.logger.error("HTTP Error:", e.code , url)
+                except urllib2.URLError, e:
+                        self.logger.error("URL Error:", e.reason , url)
+
+                return ''
+
+
+        def downloadText(self, url, data = None, filetype = 'auto'):
+                ''' Downloads the given url and return the subtitle file as a string.
+                    If url points to a compressed file, it will attempt to decompress it
+                    and return the subtitle file inside. '''
+
+                # try to see whether we just downloaded a gz or zip file, and if we did, extract it
+                result = self._downloadText(url, data)
+                zfile = StringIO.StringIO(result)
+
+                if filetype in ('auto', 'gz', 'gzip'):
+                        try:
+                                f = gzip.GzipFile(fileobj = zfile)
+                                result = f.read()
+                                f.close()
+                                return result
+                        except IOError:
+                                pass
+
+                if filetype in ('auto', 'zip'):
+                        try:
+                                zf = zipfile.ZipFile(zfile, 'r')
+                                for el in zf.infolist():
+                                        print el.orig_filename
+                                        extension = el.orig_filename.rsplit(".", 1)[1]
+                                        if extension in guessit.patterns.subtitle_exts:
+                                                result = zf.read(el.orig_filename)
+                                                zf.close()
+                                                return result
+                        except zipfile.BadZipfile:
+                                pass
+
+                if filetype in ('rar',):
+                        # TODO: implement me
+                        pass
+
+                # not a compressed file, just return the file as is
+                return result
+
 
 	@abc.abstractmethod
 	def list(self, filenames, languages):
